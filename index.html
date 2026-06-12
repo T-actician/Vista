@@ -842,6 +842,7 @@ async function handleFiles(files){
       fd.append('file', file);
       fd.append('upload_preset', CLD_PRESET);
       fd.append('folder','vista');
+      fd.append('tags','vista');
       const res = await fetch(`https://api.cloudinary.com/v1_1/${CLD_CLOUD}/image/upload`,{method:'POST',body:fd});
       const data = await res.json();
       if(data.secure_url){
