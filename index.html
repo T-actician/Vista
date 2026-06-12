@@ -284,16 +284,38 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
   <div class="section-header">
     <div class="section-eyebrow">Add Your Collection</div>
     <h2 class="section-title">Upload Nature Photography</h2>
-    <p class="section-desc">Drop an entire folder or select multiple images. Every photograph is automatically organized and displayed beautifully.</p>
+    <p class="section-desc">Images upload directly to Cloudinary — your photos become permanent URLs visible on any device, anywhere.</p>
   </div>
-  <div class="upload-zone" id="upload-zone">
+
+  <!-- Cloudinary config -->
+  <div id="cloudinary-setup" style="max-width:600px;margin:0 auto 2rem">
+    <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:1.5rem">
+      <div style="font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:1rem;font-weight:500">Cloudinary Setup</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
+        <div>
+          <label style="font-size:.75rem;color:var(--text3);display:block;margin-bottom:.375rem">Cloud Name</label>
+          <input id="cld-cloud" type="text" placeholder="your-cloud-name" style="width:100%;padding:.625rem .875rem;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:.875rem;outline:none">
+        </div>
+        <div>
+          <label style="font-size:.75rem;color:var(--text3);display:block;margin-bottom:.375rem">Upload Preset</label>
+          <input id="cld-preset" type="text" placeholder="vista_unsigned" style="width:100%;padding:.625rem .875rem;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:.875rem;outline:none">
+        </div>
+      </div>
+      <div style="font-size:.8125rem;color:var(--text3);line-height:1.6">
+        Free at <a href="https://cloudinary.com" target="_blank" style="color:var(--accent)">cloudinary.com</a> — sign up → Settings → Upload → Add upload preset → set to <strong style="color:var(--text2)">Unsigned</strong> → copy Cloud Name &amp; Preset Name above.
+      </div>
+      <button id="save-cld-btn" class="btn-primary" style="margin-top:1rem;width:100%">Save &amp; Enable Upload</button>
+    </div>
+  </div>
+
+  <div class="upload-zone" id="upload-zone" style="opacity:.4;pointer-events:none">
     <span class="upload-icon">🌿</span>
     <div class="upload-title">Drop your folder here</div>
-    <div class="upload-sub">or <em>click to select a folder</em> — all images inside load at once</div>
+    <div class="upload-sub">or <em>click to select a folder</em> — uploads to Cloudinary, visible on all devices</div>
   </div>
   <div id="upload-progress">
     <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-    <div class="progress-text" id="progress-text">Processing images…</div>
+    <div class="progress-text" id="progress-text">Uploading…</div>
   </div>
   <input type="file" id="file-input" accept="image/*" multiple webkitdirectory>
 </section>
@@ -628,6 +650,8 @@ function closeLightbox(){
   document.body.style.overflow='';
 }
 
+let lbPanX=0,lbPanY=0,lbDragging=false,lbDragStart={x:0,y:0};
+
 function showLbImage(){
   const p = photos[lbIndex];
   if(!p) return;
@@ -635,10 +659,15 @@ function showLbImage(){
   img.style.opacity='0';
   img.src = p.url;
   img.onload = ()=>{img.style.opacity='1';};
-  img.style.transform = `scale(${lbZoom})`;
+  lbPanX=0;lbPanY=0;
+  img.style.transform=`scale(${lbZoom}) translate(0px,0px)`;
   document.getElementById('lb-title').textContent = p.name;
   document.getElementById('lb-meta').textContent = `${p.category} • ${p.size}`;
   document.getElementById('lb-counter').textContent = `${lbIndex+1} / ${photos.length}`;
+}
+
+function applyLbTransform(){
+  document.getElementById('lb-img').style.transform=`scale(${lbZoom}) translate(${lbPanX}px,${lbPanY}px)`;
 }
 
 function toggleFav(id, btn, e){
@@ -722,34 +751,96 @@ function scrollToGallery(){
   document.getElementById('gallery').scrollIntoView({behavior:'smooth'});
 }
 
-// Upload
-function handleFiles(files){
+// Cloudinary config
+let CLD_CLOUD = localStorage.getItem('cld_cloud')||'';
+let CLD_PRESET = localStorage.getItem('cld_preset')||'';
+
+function initCloudinarySetup(){
+  const cloudInput = document.getElementById('cld-cloud');
+  const presetInput = document.getElementById('cld-preset');
+  if(CLD_CLOUD) cloudInput.value = CLD_CLOUD;
+  if(CLD_PRESET) presetInput.value = CLD_PRESET;
+  if(CLD_CLOUD && CLD_PRESET) enableUploadZone();
+
+  document.getElementById('save-cld-btn').addEventListener('click',()=>{
+    const c = cloudInput.value.trim();
+    const p = presetInput.value.trim();
+    if(!c||!p){ showToast('Enter both Cloud Name and Upload Preset'); return; }
+    CLD_CLOUD = c; CLD_PRESET = p;
+    localStorage.setItem('cld_cloud',c);
+    localStorage.setItem('cld_preset',p);
+    enableUploadZone();
+    showToast('Cloudinary configured ✓');
+  });
+}
+
+function enableUploadZone(){
+  const z = document.getElementById('upload-zone');
+  z.style.opacity='1';
+  z.style.pointerEvents='auto';
+  document.getElementById('cloudinary-setup').querySelector('.btn-primary').textContent='✓ Configured — Update';
+}
+
+// Upload to Cloudinary
+async function handleFiles(files){
+  if(!CLD_CLOUD||!CLD_PRESET){ showToast('Set up Cloudinary first'); document.getElementById('upload-section').scrollIntoView({behavior:'smooth'}); return; }
   const arr = Array.from(files).filter(f=>f.type.startsWith('image/'));
   if(!arr.length){ showToast('No images found'); return; }
+  const existingNames = new Set(photos.map(p=>p.filename));
+  const newArr = arr.filter(f=>!existingNames.has(f.name));
+  const skipped = arr.length - newArr.length;
+  if(!newArr.length){ showToast(`All ${skipped} image${skipped>1?'s':''} already uploaded — no duplicates added`); return; }
+
   const prog = document.getElementById('upload-progress');
-  prog.style.display = 'block';
-  let done = 0;
-  arr.forEach((file,i)=>{
-    const reader = new FileReader();
-    reader.onload = ev=>{
-      const url = ev.target.result;
-      const name = file.name.replace(/\.[^.]+$/,'').replace(/[-_]/g,' ');
-      const id = 'p'+Date.now()+i;
-      photos.push({id,url,name,category:guessCategory(name),size:formatSize(file.size),file});
-      done++;
-      const pct = Math.round(done/arr.length*100);
-      document.getElementById('progress-fill').style.width = pct+'%';
-      document.getElementById('progress-text').textContent = `Processed ${done} of ${arr.length} images…`;
-      if(done===arr.length){
-        setTimeout(()=>{prog.style.display='none';},1000);
-        buildCats();
-        renderGallery();
-        updateHeroWithPhotos();
-        showToast(`${arr.length} photograph${arr.length>1?'s':''} added to gallery`);
-      }
-    };
-    reader.readAsDataURL(file);
-  });
+  prog.style.display='block';
+  let done=0, failed=0;
+
+  for(let i=0;i<newArr.length;i++){
+    const file = newArr[i];
+    try{
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('upload_preset', CLD_PRESET);
+      fd.append('folder','vista');
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLD_CLOUD}/image/upload`,{method:'POST',body:fd});
+      const data = await res.json();
+      if(data.secure_url){
+        const name = file.name.replace(/\.[^.]+$/,'').replace(/[-_]/g,' ');
+        photos.push({id:'p'+Date.now()+i,url:data.secure_url,name,filename:file.name,category:guessCategory(name),size:formatSize(file.size),public_id:data.public_id});
+      } else { failed++; }
+    } catch(e){ failed++; }
+
+    done++;
+    const pct = Math.round(done/newArr.length*100);
+    document.getElementById('progress-fill').style.width=pct+'%';
+    document.getElementById('progress-text').textContent=`Uploaded ${done} of ${newArr.length}…`;
+  }
+
+  setTimeout(()=>{prog.style.display='none';},1000);
+  buildCats();
+  renderGallery();
+  updateHeroWithPhotos();
+  savePhotosToStorage();
+
+  let msg = `${done-failed} uploaded to Cloudinary`;
+  if(skipped) msg += ` — ${skipped} duplicate${skipped>1?'s':''} skipped`;
+  if(failed) msg += ` — ${failed} failed`;
+  showToast(msg);
+}
+
+// Persist photo list in localStorage so gallery survives page refresh
+function savePhotosToStorage(){
+  try{
+    const slim = photos.map(({id,url,name,filename,category,size,public_id})=>({id,url,name,filename,category,size,public_id}));
+    localStorage.setItem('vista_photos',JSON.stringify(slim));
+  }catch(e){}
+}
+
+function loadPhotosFromStorage(){
+  try{
+    const saved = localStorage.getItem('vista_photos');
+    if(saved){ photos = JSON.parse(saved); buildCats(); renderGallery(); updateHeroWithPhotos(); updateStats(); }
+  }catch(e){}
 }
 
 function formatSize(b){
@@ -787,8 +878,8 @@ document.getElementById('grid-btn').addEventListener('click',()=>{
 document.getElementById('lb-close').addEventListener('click',closeLightbox);
 document.getElementById('lb-prev').addEventListener('click',()=>{lbIndex=(lbIndex-1+photos.length)%photos.length;lbZoom=1;showLbImage();});
 document.getElementById('lb-next').addEventListener('click',()=>{lbIndex=(lbIndex+1)%photos.length;lbZoom=1;showLbImage();});
-document.getElementById('lb-zoom-in').addEventListener('click',()=>{lbZoom=Math.min(lbZoom+.4,3);document.getElementById('lb-img').style.transform=`scale(${lbZoom})`;});
-document.getElementById('lb-zoom-out').addEventListener('click',()=>{lbZoom=Math.max(lbZoom-.4,.5);document.getElementById('lb-img').style.transform=`scale(${lbZoom})`;});
+document.getElementById('lb-zoom-in').addEventListener('click',()=>{lbZoom=Math.min(lbZoom+.4,5);applyLbTransform();});
+document.getElementById('lb-zoom-out').addEventListener('click',()=>{lbZoom=Math.max(lbZoom-.4,.5);if(lbZoom<=1){lbPanX=0;lbPanY=0;}applyLbTransform();});
 document.getElementById('lb-dl').addEventListener('click',()=>downloadPhoto(lbIndex));
 document.getElementById('lightbox').addEventListener('click',e=>{if(e.target.id==='lightbox')closeLightbox();});
 document.addEventListener('keydown',e=>{
@@ -814,10 +905,54 @@ window.addEventListener('scroll',()=>{
   nav.style.padding = window.scrollY>60 ? '.875rem 2.5rem' : '1.25rem 2.5rem';
 });
 
+// Scroll to zoom in lightbox
+document.addEventListener('wheel',e=>{
+  const lb=document.getElementById('lightbox');
+  if(lb.style.display!=='flex') return;
+  e.preventDefault();
+  lbZoom=Math.min(Math.max(lbZoom-e.deltaY*0.001,0.5),5);
+  if(lbZoom<=1){lbPanX=0;lbPanY=0;}
+  applyLbTransform();
+},{passive:false});
+
+// Pan by drag
+const lbWrap=document.getElementById('lb-img-wrap');
+lbWrap.style.cursor='default';
+lbWrap.addEventListener('mousedown',e=>{
+  if(lbZoom<=1) return;
+  lbDragging=true;
+  lbDragStart={x:e.clientX-lbPanX*lbZoom,y:e.clientY-lbPanY*lbZoom};
+  lbWrap.style.cursor='grabbing';
+});
+document.addEventListener('mousemove',e=>{
+  if(!lbDragging) return;
+  lbPanX=(e.clientX-lbDragStart.x)/lbZoom;
+  lbPanY=(e.clientY-lbDragStart.y)/lbZoom;
+  applyLbTransform();
+});
+document.addEventListener('mouseup',()=>{lbDragging=false;lbWrap.style.cursor=lbZoom>1?'grab':'default';});
+
+// Touch pinch zoom
+let lbLastDist=0;
+lbWrap.addEventListener('touchstart',e=>{
+  if(e.touches.length===2) lbLastDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+},{passive:true});
+lbWrap.addEventListener('touchmove',e=>{
+  if(e.touches.length===2){
+    const dist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    lbZoom=Math.min(Math.max(lbZoom*(dist/lbLastDist),0.5),5);
+    lbLastDist=dist;
+    if(lbZoom<=1){lbPanX=0;lbPanY=0;}
+    applyLbTransform();
+  }
+},{passive:true});
+
 // Init
 initHero();
 buildCats();
 renderGallery();
+initCloudinarySetup();
+loadPhotosFromStorage();
 </script>
 </body>
 </html>
