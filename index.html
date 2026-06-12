@@ -289,13 +289,13 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
   <div class="upload-zone" id="upload-zone">
     <span class="upload-icon">🌿</span>
     <div class="upload-title">Drop your folder here</div>
-    <div class="upload-sub">or <em>click to browse</em> — supports JPG, PNG, WebP, HEIC</div>
+    <div class="upload-sub">or <em>click to select a folder</em> — all images inside load at once</div>
   </div>
   <div id="upload-progress">
     <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
     <div class="progress-text" id="progress-text">Processing images…</div>
   </div>
-  <input type="file" id="file-input" accept="image/*" multiple>
+  <input type="file" id="file-input" accept="image/*" multiple webkitdirectory>
 </section>
 
 <!-- CATEGORIES + GALLERY -->
