@@ -756,6 +756,44 @@ function scrollToGallery(){
 let CLD_CLOUD = localStorage.getItem('cld_cloud')||'';
 let CLD_PRESET = localStorage.getItem('cld_preset')||'';
 
+async function fetchFromCloudinary(){
+  if(!CLD_CLOUD) return;
+  showToast('Loading your Cloudinary library…');
+  try{
+    // Use Cloudinary's search API with unsigned access via resource list
+    let allResources = [];
+    let nextCursor = null;
+    do {
+      let url = `https://res.cloudinary.com/${CLD_CLOUD}/image/list/vista.json`;
+      const res = await fetch(url);
+      if(!res.ok) break;
+      const data = await res.json();
+      const resources = data.resources || [];
+      resources.forEach((r,i)=>{
+        const public_id = r.public_id;
+        const filename = public_id.split('/').pop();
+        const name = filename.replace(/[-_]/g,' ');
+        const url = `https://res.cloudinary.com/${CLD_CLOUD}/image/upload/${public_id}.${r.format||'jpg'}`;
+        const id = 'cld_'+public_id.replace(/\//g,'_');
+        if(!photos.find(p=>p.public_id===public_id)){
+          photos.push({id,url,name,filename:filename+'.'+r.format,category:guessCategory(name),size:'—',public_id});
+        }
+      });
+      nextCursor = data.next_cursor;
+    } while(nextCursor);
+
+    if(photos.length){
+      buildCats(); renderGallery(); updateHeroWithPhotos(); updateStats();
+      savePhotosToStorage();
+      showToast(`${photos.length} photos loaded from Cloudinary ✓`);
+    } else {
+      showToast('No photos found — make sure your folder is named "vista" in Cloudinary');
+    }
+  } catch(e){
+    showToast('Could not reach Cloudinary — check your Cloud Name');
+  }
+}
+
 function initCloudinarySetup(){
   const cloudInput = document.getElementById('cld-cloud');
   const presetInput = document.getElementById('cld-preset');
@@ -772,6 +810,7 @@ function initCloudinarySetup(){
     localStorage.setItem('cld_preset',p);
     enableUploadZone();
     showToast('Cloudinary configured ✓');
+    fetchFromCloudinary();
   });
 }
 
@@ -840,8 +879,15 @@ function savePhotosToStorage(){
 function loadPhotosFromStorage(){
   try{
     const saved = localStorage.getItem('vista_photos');
-    if(saved){ photos = JSON.parse(saved); buildCats(); renderGallery(); updateHeroWithPhotos(); updateStats(); }
-  }catch(e){}
+    if(saved){
+      photos = JSON.parse(saved);
+      buildCats(); renderGallery(); updateHeroWithPhotos(); updateStats();
+    } else if(CLD_CLOUD){
+      fetchFromCloudinary();
+    }
+  }catch(e){
+    if(CLD_CLOUD) fetchFromCloudinary();
+  }
 }
 
 function formatSize(b){
