@@ -249,6 +249,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
   <div class="nav-actions">
     <button class="btn-icon" id="search-toggle" title="Search" aria-label="Search">🔍</button>
     <button class="btn-icon" id="fav-toggle" title="Favorites" aria-label="Favorites">🤍</button>
+    <button class="btn-icon" id="export-btn" title="Export Gallery" aria-label="Export Gallery">⬇️</button>
     <button class="btn-icon" id="theme-toggle" title="Toggle theme" aria-label="Toggle theme">☀️</button>
     <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
   </div>
@@ -946,6 +947,25 @@ lbWrap.addEventListener('touchmove',e=>{
     applyLbTransform();
   }
 },{passive:true});
+
+// Export Gallery — bakes all Cloudinary URLs into a standalone HTML file
+function exportGallery(){
+  if(!photos.length){ showToast('No photos to export yet'); return; }
+
+  const photosJSON = JSON.stringify(photos.map(({id,url,name,filename,category,size,public_id})=>({id,url,name,filename,category,size,public_id})));
+  const currentHTML = document.documentElement.outerHTML;
+  const marker = '// Init\ninitHero();\nbuildCats();\nrenderGallery();\ninitCloudinarySetup();\nloadPhotosFromStorage();';
+  const replacement = `// Init\nphotos = ${photosJSON};\ninitHero();\nbuildCats();\nrenderGallery();\ninitCloudinarySetup();\nupdateHeroWithPhotos();\nupdateStats();`;
+  const injected = currentHTML.replace(marker, replacement);
+  const blob = new Blob([injected], {type:'text/html'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'vista.html';
+  a.click();
+  showToast(`Exported with ${photos.length} photos baked in — push to GitHub!`);
+}
+
+document.getElementById('export-btn').addEventListener('click', exportGallery);
 
 // Init
 initHero();
