@@ -226,8 +226,27 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
 }
 @media(max-width:600px){
   section{padding:3.5rem 1.25rem}
-  .masonry-grid{columns:1;padding:1rem 1.25rem}
-  .grid-view .masonry-grid{grid-template-columns:1fr 1fr}
+  .masonry-grid{
+    columns:unset!important;
+    display:grid!important;
+    grid-template-columns:repeat(4,1fr)!important;
+    gap:.375rem!important;
+    padding:.5rem .5rem!important;
+  }
+  .masonry-item{
+    break-inside:unset;
+    margin-bottom:0;
+    border-radius:6px;
+  }
+  .masonry-item img{
+    aspect-ratio:1;
+    object-fit:cover;
+    height:auto;
+  }
+  /* hide card actions on mobile grid — show only in lightbox */
+  .masonry-item .card-overlay,
+  .masonry-item .img-cat-badge{display:none!important}
+  .grid-view .masonry-grid{grid-template-columns:repeat(4,1fr)!important}
   .gallery-toolbar{padding:.75rem 1.25rem}
   .footer-grid{grid-template-columns:1fr}
   .featured-grid{grid-template-columns:1fr}
@@ -1083,112 +1102,164 @@ document.addEventListener('mouseup',()=>{
   lbWrap.style.cursor=lb_state.scale>1?'grab':'default';
 });
 
-// ---- Premium touch gesture system ----
+// ---- Touch gesture system (stable pinch-to-zoom, no wobble) ----
 (function(){
   const lb = document.getElementById('lightbox');
+  const img = document.getElementById('lb-img');
 
-  function getTouchMid(t1,t2){
-    return { x:(t1.clientX+t2.clientX)/2, y:(t1.clientY+t2.clientY)/2 };
+  // Internal transform state — tx/ty are pixel offsets from center
+  // We keep transform-origin at 50% 50% and compute offsets manually
+  // so the image never jumps when fingers are placed/lifted
+  let ts = {
+    scale: 1, tx: 0, ty: 0,
+    // pinch
+    pinching: false,
+    p0x: 0, p0y: 0,       // midpoint at gesture start (screen coords)
+    s0: 1, tx0: 0, ty0: 0, // transform at gesture start
+    d0: 0,                 // initial finger distance
+    // pan (single finger while zoomed)
+    panning: false,
+    fx0: 0, fy0: 0,        // finger start
+    ptx0: 0, pty0: 0,      // transform at pan start
+    // swipe
+    swiping: false,
+    sx0: 0, sy0: 0,
+  };
+
+  function applyTransform(instant){
+    img.style.transition = instant ? 'none' : 'transform .05s linear';
+    img.style.transform = `translate3d(${ts.tx}px,${ts.ty}px,0) scale(${ts.scale})`;
+    // sync shared lb_state so existing zoom buttons / mouse drag still work
+    lb_state.scale = ts.scale;
+    lb_state.x = ts.tx;
+    lb_state.y = ts.ty;
   }
-  function getTouchDist(t1,t2){
-    return Math.hypot(t1.clientX-t2.clientX, t1.clientY-t2.clientY);
+
+  function clamp(){
+    // constrain so image can't be dragged fully off-screen
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const rw = (img.naturalWidth  || vw)  / (img.naturalWidth  || vw)  * vw  * ts.scale;
+    const rh = (img.naturalHeight || vh) / (img.naturalHeight || vh) * vh * ts.scale;
+    const maxX = Math.max(0, (rw - vw)  / 2);
+    const maxY = Math.max(0, (rh - vh) / 2);
+    ts.tx = Math.max(-maxX, Math.min(maxX, ts.tx));
+    ts.ty = Math.max(-maxY, Math.min(maxY, ts.ty));
   }
+
+  function dist(t1,t2){ return Math.hypot(t1.clientX-t2.clientX, t1.clientY-t2.clientY); }
+  function mid(t1,t2){ return { x:(t1.clientX+t2.clientX)/2, y:(t1.clientY+t2.clientY)/2 }; }
+
+  // Keep ts in sync when external code (zoom buttons, lightbox nav) resets state
+  const _origShowLbImage = showLbImage;
+  // patch applyLbTransform to also reset ts
+  const _origApply = applyLbTransform;
+  window._lbResetTs = function(){
+    ts.scale=1; ts.tx=0; ts.ty=0;
+  };
 
   lb.addEventListener('touchstart', e=>{
-    const touches = e.touches;
-    if(touches.length === 2){
-      // Start pinch
-      lb_state.pinching = true;
-      lb_state.swiping = false;
-      lb_state.panning = false;
-      lb_state.pinchStartDist = getTouchDist(touches[0],touches[1]);
-      lb_state.pinchStartScale = lb_state.scale;
-      const mid = getTouchMid(touches[0],touches[1]);
-      lb_state.pinchMidX = mid.x;
-      lb_state.pinchMidY = mid.y;
-      lb_state.dragOriginX = lb_state.x;
-      lb_state.dragOriginY = lb_state.y;
-      lbHideControls();
+    // Sync ts from lb_state in case external code changed it
+    ts.scale = lb_state.scale; ts.tx = lb_state.x; ts.ty = lb_state.y;
+
+    if(e.touches.length === 2){
       e.preventDefault();
-    } else if(touches.length === 1){
-      lb_state.pinching = false;
-      lb_state.swipeStartX = touches[0].clientX;
-      lb_state.swipeStartY = touches[0].clientY;
-      if(lb_state.scale > 1){
-        // Pan mode
-        lb_state.panning = true;
-        lb_state.swiping = false;
-        lb_state.panStartX = touches[0].clientX;
-        lb_state.panStartY = touches[0].clientY;
-        lb_state.panOriginX = lb_state.x;
-        lb_state.panOriginY = lb_state.y;
+      ts.pinching = true; ts.swiping = false; ts.panning = false;
+      ts.d0 = dist(e.touches[0], e.touches[1]);
+      const m = mid(e.touches[0], e.touches[1]);
+      ts.p0x = m.x; ts.p0y = m.y;
+      ts.s0 = ts.scale; ts.tx0 = ts.tx; ts.ty0 = ts.ty;
+      lbHideControls();
+    } else if(e.touches.length === 1){
+      ts.pinching = false;
+      ts.sx0 = e.touches[0].clientX;
+      ts.sy0 = e.touches[0].clientY;
+      if(ts.scale > 1){
+        ts.panning = true; ts.swiping = false;
+        ts.fx0 = e.touches[0].clientX; ts.fy0 = e.touches[0].clientY;
+        ts.ptx0 = ts.tx; ts.pty0 = ts.ty;
       } else {
-        lb_state.panning = false;
-        lb_state.swiping = true;
+        ts.panning = false; ts.swiping = true;
       }
     }
   },{passive:false});
 
   lb.addEventListener('touchmove', e=>{
-    const touches = e.touches;
-    if(lb_state.pinching && touches.length === 2){
+    if(ts.pinching && e.touches.length >= 2){
       e.preventDefault();
-      const newDist = getTouchDist(touches[0],touches[1]);
-      const newMid = getTouchMid(touches[0],touches[1]);
-      const scaleRatio = newDist / lb_state.pinchStartDist;
-      const newScale = Math.min(Math.max(lb_state.pinchStartScale * scaleRatio, 1), 5);
-      // Adjust pan to keep pinch center fixed
-      const midDeltaX = newMid.x - lb_state.pinchMidX;
-      const midDeltaY = newMid.y - lb_state.pinchMidY;
-      lb_state.scale = newScale;
-      lb_state.x = lb_state.dragOriginX + midDeltaX;
-      lb_state.y = lb_state.dragOriginY + midDeltaY;
-      lbClampPan();
-      applyLbTransform(true);
-    } else if(lb_state.panning && touches.length === 1){
+      const newDist = dist(e.touches[0], e.touches[1]);
+      const newMid  = mid(e.touches[0], e.touches[1]);
+      const ratio   = newDist / ts.d0;
+      const newScale = Math.min(Math.max(ts.s0 * ratio, 1), 5);
+
+      // Keep the pinch midpoint anchored:
+      // point under fingers = (midScreen - center) in pre-scale space
+      // after scale change, we adjust tx/ty so that same world point stays under fingers
+      const vw = window.innerWidth, vh = window.innerHeight;
+      // Vector from viewport center to initial midpoint
+      const cx0 = ts.p0x - vw/2;
+      const cy0 = ts.p0y - vh/2;
+      // Vector from viewport center to current midpoint (finger drag)
+      const cx1 = newMid.x - vw/2;
+      const cy1 = newMid.y - vh/2;
+
+      // Anchor math: new_tx = cx1 - (cx0 - tx0) * (newScale/s0)
+      ts.tx = cx1 - (cx0 - ts.tx0) * (newScale / ts.s0);
+      ts.ty = cy1 - (cy0 - ts.ty0) * (newScale / ts.s0);
+      ts.scale = newScale;
+      clamp();
+      applyTransform(true);
+
+    } else if(ts.panning && e.touches.length === 1){
       e.preventDefault();
-      lb_state.x = lb_state.panOriginX + (touches[0].clientX - lb_state.panStartX);
-      lb_state.y = lb_state.panOriginY + (touches[0].clientY - lb_state.panStartY);
-      lbClampPan();
-      applyLbTransform(true);
-    } else if(lb_state.swiping && touches.length === 1){
-      // Just track for swipe — don't preventDefault so vertical scroll works
-      const dx = touches[0].clientX - lb_state.swipeStartX;
-      const dy = touches[0].clientY - lb_state.swipeStartY;
-      if(Math.abs(dx) > 8) e.preventDefault(); // lock horizontal
+      ts.tx = ts.ptx0 + (e.touches[0].clientX - ts.fx0);
+      ts.ty = ts.pty0 + (e.touches[0].clientY - ts.fy0);
+      clamp();
+      applyTransform(true);
+
+    } else if(ts.swiping && e.touches.length === 1){
+      const dx = e.touches[0].clientX - ts.sx0;
+      if(Math.abs(dx) > 8) e.preventDefault();
     }
   },{passive:false});
 
   lb.addEventListener('touchend', e=>{
-    const touches = e.changedTouches;
-    if(lb_state.pinching){
-      lb_state.pinching = false;
-      if(lb_state.scale <= 1){ lb_state.x=0; lb_state.y=0; applyLbTransform(); }
-      lbShowControls();
-      lbScheduleHide();
+    if(ts.pinching){
+      ts.pinching = false;
+      if(ts.scale <= 1){ ts.scale=1; ts.tx=0; ts.ty=0; applyTransform(false); }
+      // sync lb_state
+      lb_state.scale=ts.scale; lb_state.x=ts.tx; lb_state.y=ts.ty;
+      lbShowControls(); lbScheduleHide();
       return;
     }
-    if(lb_state.panning){
-      lb_state.panning = false;
+    if(ts.panning){
+      ts.panning = false;
+      lb_state.scale=ts.scale; lb_state.x=ts.tx; lb_state.y=ts.ty;
       lbShowControls();
       return;
     }
-    if(lb_state.swiping && touches.length >= 1){
-      lb_state.swiping = false;
-      const dx = touches[0].clientX - lb_state.swipeStartX;
-      const dy = touches[0].clientY - lb_state.swipeStartY;
+    if(ts.swiping && e.changedTouches.length >= 1){
+      ts.swiping = false;
+      const dx = e.changedTouches[0].clientX - ts.sx0;
+      const dy = e.changedTouches[0].clientY - ts.sy0;
       if(Math.abs(dx) > 50 && Math.abs(dy) < 80){
-        if(dx < 0){ lbIndex=(lbIndex+1)%photos.length; }
-        else { lbIndex=(lbIndex-1+photos.length)%photos.length; }
-        showLbImage();
-        lbShowControls();
+        lbIndex = dx < 0 ? (lbIndex+1)%photos.length : (lbIndex-1+photos.length)%photos.length;
+        ts.scale=1; ts.tx=0; ts.ty=0;
+        showLbImage(); lbShowControls();
       }
     }
   },{passive:true});
 
   lb.addEventListener('touchcancel',()=>{
-    lb_state.pinching=false; lb_state.panning=false; lb_state.swiping=false;
+    ts.pinching=false; ts.panning=false; ts.swiping=false;
   },{passive:true});
+
+  // Patch showLbImage to also reset ts
+  const _orig = window.showLbImage;
+  window.showLbImage = function(){
+    ts.scale=1; ts.tx=0; ts.ty=0;
+    lb_state.scale=1; lb_state.x=0; lb_state.y=0;
+    _orig();
+  };
 })();
 
 // Export Gallery — bakes all Cloudinary URLs into a standalone HTML file
