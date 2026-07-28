@@ -6,6 +6,7 @@
 <title>VISTA — Nature Photography</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -40,7 +41,6 @@ nav{position:fixed;top:0;left:0;right:0;z-index:1000;padding:1.25rem 2.5rem;disp
 .btn-icon{background:var(--surface);border:1px solid var(--border);border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);transition:var(--transition);font-size:1rem}
 .btn-icon:hover{background:var(--surface2);color:var(--text);border-color:var(--border2)}
 .hamburger{display:none;background:none;border:none;cursor:pointer;color:var(--text);font-size:1.4rem}
-@media(max-width:900px){.export-nav-btn{display:none}}
 
 /* HERO */
 #hero{height:100vh;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
@@ -81,7 +81,6 @@ section{padding:5rem 2.5rem}
 .section-desc{color:var(--text2);margin-top:.75rem;font-size:.9375rem;max-width:520px;margin-left:auto;margin-right:auto;line-height:1.7}
 
 /* UPLOAD */
-#upload-section{background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
 .upload-zone{border:1.5px dashed var(--border2);border-radius:var(--radius-lg);padding:4rem 2rem;text-align:center;cursor:pointer;transition:var(--transition);max-width:600px;margin:0 auto;background:var(--surface)}
 .upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:rgba(122,173,106,0.06)}
 .upload-icon{font-size:2.5rem;margin-bottom:1rem;display:block}
@@ -126,7 +125,13 @@ section{padding:5rem 2.5rem}
 .img-cat-badge{position:absolute;top:.75rem;left:.75rem;background:rgba(0,0,0,0.45);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:100px;padding:.2rem .625rem;font-size:.625rem;letter-spacing:.1em;text-transform:uppercase}
 
 .grid-view .masonry-grid{columns:unset;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem}
-.grid-view .masonry-item{break-inside:unset;margin-bottom:0}
+.grid-view .masonry-item{break-inside:unset;margin-bottom:0;aspect-ratio:1}
+.grid-view .masonry-item img{width:100%;height:100%;object-fit:cover}
+
+/* ADMIN ROUTE (#/admin) */
+#admin-view{display:none}
+body.admin-mode>*:not(#admin-view){display:none!important}
+body.admin-mode #admin-view{display:block;min-height:100vh;padding:2rem 1.5rem}
 
 .empty-state{text-align:center;padding:6rem 2rem;color:var(--text3)}
 .empty-icon{font-size:3rem;margin-bottom:1rem;display:block}
@@ -288,12 +293,10 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
     <a href="#categories">Explore</a>
     <a href="#featured">Featured</a>
     <a href="#story">Stories</a>
-    <a href="#upload-section">Upload</a>
   </div>
   <div class="nav-actions">
     <button class="btn-icon" id="search-toggle" title="Search" aria-label="Search">🔍</button>
     <button class="btn-icon" id="fav-toggle" title="Favorites" aria-label="Favorites">🤍</button>
-    <button class="btn-icon export-nav-btn" id="export-btn" title="Export Gallery" aria-label="Export Gallery">⬇️</button>
     <button class="btn-icon" id="theme-toggle" title="Toggle theme" aria-label="Toggle theme">☀️</button>
     <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
   </div>
@@ -309,7 +312,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
     <p class="hero-quote" id="hero-quote">"In every walk with nature, one receives far more than he seeks."</p>
     <div class="hero-cta">
       <button class="btn-primary" onclick="scrollToGallery()">Explore Gallery</button>
-      <button class="btn-ghost" onclick="document.getElementById('upload-section').scrollIntoView({behavior:'smooth'})">Upload Photos</button>
+      <button class="btn-ghost" onclick="document.getElementById('story').scrollIntoView({behavior:'smooth'})">Our Story</button>
     </div>
   </div>
   <div class="hero-dots" id="hero-dots"></div>
@@ -323,47 +326,6 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
   <div class="stat"><div class="stat-num" id="stat-favs">0</div><div class="stat-label">Favourites</div></div>
   <div class="stat"><div class="stat-num">4K</div><div class="stat-label">Resolution</div></div>
 </div>
-
-<!-- UPLOAD -->
-<section id="upload-section">
-  <div class="section-header">
-    <div class="section-eyebrow">Add Your Collection</div>
-    <h2 class="section-title">Upload Nature Photography</h2>
-    <p class="section-desc">Images upload directly to Cloudinary — your photos become permanent URLs visible on any device, anywhere.</p>
-  </div>
-
-  <!-- Cloudinary config -->
-  <div id="cloudinary-setup" style="max-width:600px;margin:0 auto 2rem">
-    <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:1.5rem">
-      <div style="font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:1rem;font-weight:500">Cloudinary Setup</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
-        <div>
-          <label style="font-size:.75rem;color:var(--text3);display:block;margin-bottom:.375rem">Cloud Name</label>
-          <input id="cld-cloud" type="text" placeholder="your-cloud-name" style="width:100%;padding:.625rem .875rem;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:.875rem;outline:none">
-        </div>
-        <div>
-          <label style="font-size:.75rem;color:var(--text3);display:block;margin-bottom:.375rem">Upload Preset</label>
-          <input id="cld-preset" type="text" placeholder="vista_unsigned" style="width:100%;padding:.625rem .875rem;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:.875rem;outline:none">
-        </div>
-      </div>
-      <div style="font-size:.8125rem;color:var(--text3);line-height:1.6">
-        Free at <a href="https://cloudinary.com" target="_blank" style="color:var(--accent)">cloudinary.com</a> — sign up → Settings → Upload → Add upload preset → set to <strong style="color:var(--text2)">Unsigned</strong> → copy Cloud Name &amp; Preset Name above.
-      </div>
-      <button id="save-cld-btn" class="btn-primary" style="margin-top:1rem;width:100%">Save &amp; Enable Upload</button>
-    </div>
-  </div>
-
-  <div class="upload-zone" id="upload-zone" style="opacity:.4;pointer-events:none">
-    <span class="upload-icon">🌿</span>
-    <div class="upload-title">Drop your folder here</div>
-    <div class="upload-sub">or <em>click to select a folder</em> — uploads to Cloudinary, visible on all devices</div>
-  </div>
-  <div id="upload-progress">
-    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-    <div class="progress-text" id="progress-text">Uploading…</div>
-  </div>
-  <input type="file" id="file-input" accept="image/*" multiple webkitdirectory>
-</section>
 
 <!-- CATEGORIES + GALLERY -->
 <section id="categories">
@@ -435,7 +397,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
       <p>Nature photography is not merely the act of pointing a lens at the world — it is the practice of patient attention. Of returning to the same ridge at dawn, season after season, until the light arrives exactly as you imagined it.</p>
       <div class="quote-line">"The earth has music for those who listen. In forests, on cliffs, beside still water — the world composes endlessly for a quiet observer."</div>
       <p>VISTA exists to hold these moments. Not to archive them, but to present them with the reverence they deserve — as windows into landscapes most of us will only ever know through photography.</p>
-      <button class="btn-primary" onclick="document.getElementById('upload-section').scrollIntoView({behavior:'smooth'})">Begin Your Collection</button>
+      <button class="btn-primary" onclick="scrollToGallery()">Explore the Gallery</button>
     </div>
   </div>
 </section>
@@ -465,7 +427,6 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
     </div>
     <div class="footer-col">
       <h4>Platform</h4>
-      <a href="#upload-section">Upload Photos</a>
       <a href="#story">Our Story</a>
       <a href="#" onclick="toggleFavPanel()">Favourites</a>
     </div>
@@ -511,6 +472,41 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
   </div>
   <div class="fav-grid" id="fav-grid">
     <div class="fav-empty" style="grid-column:1/3">Heart photos to save them here 🤍</div>
+  </div>
+</div>
+
+<!-- ADMIN (#/admin) -->
+<div id="admin-view">
+  <div id="admin-login" style="max-width:360px;margin:15vh auto;padding:2rem;text-align:center">
+    <div class="logo" style="display:block;margin-bottom:2rem">VIST<span>A</span></div>
+    <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.5rem;margin-bottom:1.5rem">Admin Sign In</h2>
+    <input id="admin-email" type="email" placeholder="Email" autocomplete="username" style="width:100%;margin-bottom:.75rem;padding:.75rem 1rem;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:.9375rem;outline:none">
+    <input id="admin-password" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;margin-bottom:1.25rem;padding:.75rem 1rem;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:.9375rem;outline:none">
+    <button id="admin-login-btn" class="btn-primary" style="width:100%">Sign In</button>
+    <div id="admin-login-error" style="color:#e07a7a;font-size:.8125rem;margin-top:.75rem;min-height:1.2em"></div>
+  </div>
+  <div id="admin-dashboard" style="display:none;max-width:600px;margin:8vh auto;padding:0 1.5rem">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2rem;flex-wrap:wrap;gap:1rem">
+      <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.75rem">Upload Photos</h2>
+      <div style="display:flex;align-items:center;gap:1rem">
+        <a href="#" style="color:var(--text2);font-size:.875rem;text-decoration:none">View Site</a>
+        <button id="admin-signout-btn" class="btn-ghost" style="padding:.5rem 1.25rem">Sign Out</button>
+      </div>
+    </div>
+    <div class="upload-zone" id="admin-upload-zone">
+      <span class="upload-icon">🌿</span>
+      <div class="upload-title">Drop photos here</div>
+      <div class="upload-sub">or <em>click to select</em> — individual files</div>
+    </div>
+    <div style="text-align:center;margin-top:.75rem">
+      <button id="admin-folder-btn" class="btn-ghost" style="padding:.5rem 1.25rem;font-size:.8125rem">Select a Folder Instead</button>
+    </div>
+    <input type="file" id="admin-file-input" accept="image/*" multiple style="display:none">
+    <input type="file" id="admin-folder-input" accept="image/*" multiple webkitdirectory style="display:none">
+    <div id="upload-progress">
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="progress-text" id="progress-text">Uploading…</div>
+    </div>
   </div>
 </div>
 
@@ -652,11 +648,9 @@ const imgCache = new Map();
 // thumb->original fallback map
 const p_url_map = new Map();
 
-// Cloudinary thumbnail URL: w_400, q_auto:low, f_auto
+// Small pre-generated thumbnail (uploaded alongside the original at upload time)
 function thumbUrl(p){
-  if(!p.public_id || !CLD_CLOUD) return p.url;
-  const ext = p.url.split('.').pop().split('?')[0] || 'jpg';
-  return `https://res.cloudinary.com/${CLD_CLOUD}/image/upload/w_400,q_auto:low,f_auto/${p.public_id}.${ext}`;
+  return p.thumbUrl || p.url;
 }
 
 // Lazy-load observer: fires 200px before card enters viewport
@@ -980,142 +974,21 @@ function scrollToGallery(){
   document.getElementById('gallery').scrollIntoView({behavior:'smooth'});
 }
 
-// Cloudinary config
-let CLD_CLOUD = localStorage.getItem('cld_cloud')||'dcxuyjzop';
-let CLD_PRESET = localStorage.getItem('cld_preset')||'VistaPics';
+// Supabase (admin auth) — anon key is safe to expose, it only allows sign-in
+const SUPABASE_URL = 'https://qfpxdasmkkxroeevmkte.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmcHhkYXNta2t4cm9lZXZta3RlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyNjIzMjAsImV4cCI6MjEwMDgzODMyMH0.0aiib1-IcG_DnmFK_PSsROzSuQxJkRGmceysxkUPCyc';
+const ADMIN_UID = 'e97ea8cf-813c-4fb1-8cbc-b1da380a91d3';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-async function fetchFromCloudinary(){
-  if(!CLD_CLOUD) return;
-  // silent load on init
+// Public gallery — always sourced fresh from the B2 bucket via /api/photos
+async function loadPhotos(){
   try{
-    // Use Cloudinary's search API with unsigned access via resource list
-    let allResources = [];
-    let nextCursor = null;
-    do {
-      let url = `https://res.cloudinary.com/${CLD_CLOUD}/image/list/vista.json`;
-      const res = await fetch(url);
-      if(!res.ok) break;
-      const data = await res.json();
-      const resources = data.resources || [];
-      resources.forEach((r,i)=>{
-        const public_id = r.public_id;
-        const filename = public_id.split('/').pop();
-        const name = filename.replace(/[-_]/g,' ');
-        const url = `https://res.cloudinary.com/${CLD_CLOUD}/image/upload/${public_id}.${r.format||'jpg'}`;
-        const id = 'cld_'+public_id.replace(/\//g,'_');
-        if(!photos.find(p=>p.public_id===public_id)){
-          photos.push({id,url,name,filename:filename+'.'+r.format,category:guessCategory(name),size:'—',public_id});
-        }
-      });
-      nextCursor = data.next_cursor;
-    } while(nextCursor);
-
-    if(photos.length){
-      buildCats(); renderGallery(); updateHeroWithPhotos(); updateStats();
-      savePhotosToStorage();
-      showToast(`${photos.length} photos loaded from Cloudinary ✓`);
-    } else {
-      console.log('No vista-tagged photos found in Cloudinary');
-    }
-  } catch(e){
-    showToast('Could not reach Cloudinary — check your Cloud Name');
-  }
-}
-
-function initCloudinarySetup(){
-  const cloudInput = document.getElementById('cld-cloud');
-  const presetInput = document.getElementById('cld-preset');
-  if(CLD_CLOUD) cloudInput.value = CLD_CLOUD;
-  if(CLD_PRESET) presetInput.value = CLD_PRESET;
-  if(CLD_CLOUD && CLD_PRESET) enableUploadZone();
-
-  document.getElementById('save-cld-btn').addEventListener('click',()=>{
-    const c = cloudInput.value.trim();
-    const p = presetInput.value.trim();
-    if(!c||!p){ showToast('Enter both Cloud Name and Upload Preset'); return; }
-    CLD_CLOUD = c; CLD_PRESET = p;
-    localStorage.setItem('cld_cloud',c);
-    localStorage.setItem('cld_preset',p);
-    enableUploadZone();
-    showToast('Cloudinary configured ✓');
-    fetchFromCloudinary();
-  });
-}
-
-function enableUploadZone(){
-  const z = document.getElementById('upload-zone');
-  z.style.opacity='1';
-  z.style.pointerEvents='auto';
-  document.getElementById('cloudinary-setup').querySelector('.btn-primary').textContent='✓ Configured — Update';
-}
-
-// Upload to Cloudinary
-async function handleFiles(files){
-  if(!CLD_CLOUD||!CLD_PRESET){ showToast('Set up Cloudinary first'); document.getElementById('upload-section').scrollIntoView({behavior:'smooth'}); return; }
-  const arr = Array.from(files).filter(f=>f.type.startsWith('image/'));
-  if(!arr.length){ showToast('No images found'); return; }
-  const existingNames = new Set(photos.map(p=>p.filename));
-  const newArr = arr.filter(f=>!existingNames.has(f.name));
-  const skipped = arr.length - newArr.length;
-  if(!newArr.length){ showToast(`All ${skipped} image${skipped>1?'s':''} already uploaded — no duplicates added`); return; }
-
-  const prog = document.getElementById('upload-progress');
-  prog.style.display='block';
-  let done=0, failed=0;
-
-  for(let i=0;i<newArr.length;i++){
-    const file = newArr[i];
-    try{
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('upload_preset', CLD_PRESET);
-      fd.append('folder','vista');
-      fd.append('tags','vista');
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLD_CLOUD}/image/upload`,{method:'POST',body:fd});
-      const data = await res.json();
-      if(data.secure_url){
-        const name = file.name.replace(/\.[^.]+$/,'').replace(/[-_]/g,' ');
-        photos.push({id:'p'+Date.now()+i,url:data.secure_url,name,filename:file.name,category:guessCategory(name),size:formatSize(file.size),public_id:data.public_id});
-      } else { failed++; }
-    } catch(e){ failed++; }
-
-    done++;
-    const pct = Math.round(done/newArr.length*100);
-    document.getElementById('progress-fill').style.width=pct+'%';
-    document.getElementById('progress-text').textContent=`Uploaded ${done} of ${newArr.length}…`;
-  }
-
-  setTimeout(()=>{prog.style.display='none';},1000);
-  buildCats();
-  renderGallery();
-  updateHeroWithPhotos();
-  savePhotosToStorage();
-
-  let msg = `${done-failed} uploaded to Cloudinary`;
-  if(skipped) msg += ` — ${skipped} duplicate${skipped>1?'s':''} skipped`;
-  if(failed) msg += ` — ${failed} failed`;
-  showToast(msg);
-}
-
-// Persist photo list in localStorage so gallery survives page refresh
-function savePhotosToStorage(){
-  try{
-    const slim = photos.map(({id,url,name,filename,category,size,public_id})=>({id,url,name,filename,category,size,public_id}));
-    localStorage.setItem('vista_photos',JSON.stringify(slim));
-  }catch(e){}
-}
-
-function loadPhotosFromStorage(){
-  try{
-    const saved = localStorage.getItem('vista_photos');
-    if(saved){
-      photos = JSON.parse(saved);
-      buildCats(); renderGallery(); updateHeroWithPhotos(); updateStats();
-    } else if(CLD_CLOUD){
-      fetchFromCloudinary();
-    }
+    const res = await fetch('/api/photos');
+    const data = await res.json();
+    photos = (data.photos||[]).map(p=>({...p, category:guessCategory(p.name)}));
+    buildCats(); renderGallery(); updateHeroWithPhotos(); updateStats();
   }catch(e){
-    if(CLD_CLOUD) fetchFromCloudinary();
+    console.error('Could not load photos', e);
   }
 }
 
@@ -1124,13 +997,104 @@ function formatSize(b){
   return (b/1024).toFixed(0)+' KB';
 }
 
-// Event bindings
-document.getElementById('upload-zone').addEventListener('click',()=>document.getElementById('file-input').click());
-document.getElementById('file-input').addEventListener('change',e=>handleFiles(e.target.files));
-document.getElementById('upload-zone').addEventListener('dragover',e=>{e.preventDefault();e.currentTarget.classList.add('dragover');});
-document.getElementById('upload-zone').addEventListener('dragleave',e=>e.currentTarget.classList.remove('dragover'));
-document.getElementById('upload-zone').addEventListener('drop',e=>{e.preventDefault();e.currentTarget.classList.remove('dragover');handleFiles(e.dataTransfer.files);});
+// ---- Admin (#/admin) ----
+function checkAdminRoute(){
+  if(location.hash === '#/admin'){
+    document.body.classList.add('admin-mode');
+    refreshAdminUI();
+  } else {
+    document.body.classList.remove('admin-mode');
+  }
+}
+window.addEventListener('hashchange', checkAdminRoute);
 
+async function refreshAdminUI(){
+  const { data:{ session: s } } = await sb.auth.getSession();
+  const isAdmin = !!(s && s.user && s.user.id === ADMIN_UID);
+  document.getElementById('admin-login').style.display = isAdmin ? 'none' : 'block';
+  document.getElementById('admin-dashboard').style.display = isAdmin ? 'block' : 'none';
+}
+
+document.getElementById('admin-login-btn').addEventListener('click', async ()=>{
+  const email = document.getElementById('admin-email').value.trim();
+  const password = document.getElementById('admin-password').value;
+  const errEl = document.getElementById('admin-login-error');
+  errEl.textContent = '';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if(error){ errEl.textContent = error.message; return; }
+  if(data.user.id !== ADMIN_UID){ errEl.textContent = 'Not authorized'; await sb.auth.signOut(); return; }
+  refreshAdminUI();
+});
+
+document.getElementById('admin-signout-btn').addEventListener('click', async ()=>{
+  await sb.auth.signOut();
+  refreshAdminUI();
+});
+
+// Shrink a source image to a small JPEG thumbnail entirely client-side
+async function makeThumbnail(file, maxW=480){
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, maxW / bitmap.width);
+  const w = Math.max(1, Math.round(bitmap.width*scale));
+  const h = Math.max(1, Math.round(bitmap.height*scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+  return new Promise(resolve=>canvas.toBlob(resolve, 'image/jpeg', 0.72));
+}
+
+async function signAndPut(token, baseName, contentType, kind, blob){
+  const res = await fetch('/api/sign-upload', {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+    body: JSON.stringify({ filename: baseName, contentType, kind })
+  });
+  const data = await res.json();
+  if(!data.uploadUrl) throw new Error(data.error || 'sign failed');
+  await fetch(data.uploadUrl, { method:'PUT', headers:{'Content-Type':contentType}, body: blob });
+  return data.publicUrl;
+}
+
+async function handleAdminFiles(files){
+  const arr = Array.from(files).filter(f=>f.type.startsWith('image/'));
+  if(!arr.length){ showToast('No images found'); return; }
+  const { data:{ session: s } } = await sb.auth.getSession();
+  if(!s){ showToast('Session expired — sign in again'); return; }
+  const token = s.access_token;
+
+  const prog = document.getElementById('upload-progress');
+  prog.style.display='block';
+  let done=0, failed=0;
+
+  for(let i=0;i<arr.length;i++){
+    const file = arr[i];
+    try{
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      const baseName = `${Date.now()}_${i}_${safeName}`;
+      const thumbBlob = await makeThumbnail(file);
+      await signAndPut(token, baseName, file.type, 'photo', file);
+      await signAndPut(token, baseName, 'image/jpeg', 'thumb', thumbBlob);
+    } catch(e){ failed++; }
+
+    done++;
+    const pct = Math.round(done/arr.length*100);
+    document.getElementById('progress-fill').style.width=pct+'%';
+    document.getElementById('progress-text').textContent=`Uploaded ${done} of ${arr.length}…`;
+  }
+
+  setTimeout(()=>{prog.style.display='none';},1000);
+  showToast(`${done-failed} uploaded${failed?` — ${failed} failed`:''}`);
+}
+
+document.getElementById('admin-upload-zone').addEventListener('click',()=>document.getElementById('admin-file-input').click());
+document.getElementById('admin-folder-btn').addEventListener('click',()=>document.getElementById('admin-folder-input').click());
+document.getElementById('admin-file-input').addEventListener('change',e=>handleAdminFiles(e.target.files));
+document.getElementById('admin-folder-input').addEventListener('change',e=>handleAdminFiles(e.target.files));
+document.getElementById('admin-upload-zone').addEventListener('dragover',e=>{e.preventDefault();e.currentTarget.classList.add('dragover');});
+document.getElementById('admin-upload-zone').addEventListener('dragleave',e=>e.currentTarget.classList.remove('dragover'));
+document.getElementById('admin-upload-zone').addEventListener('drop',e=>{e.preventDefault();e.currentTarget.classList.remove('dragover');handleAdminFiles(e.dataTransfer.files);});
+
+// Event bindings
 document.getElementById('search-input').addEventListener('input',e=>{searchQ=e.target.value;renderGallery();});
 document.getElementById('sort-select').addEventListener('change',e=>{sortMode=e.target.value;renderGallery();});
 document.getElementById('search-toggle').addEventListener('click',()=>{
@@ -1379,31 +1343,12 @@ document.addEventListener('mouseup',()=>{
   };
 })();
 
-// Export Gallery — bakes all Cloudinary URLs into a standalone HTML file
-function exportGallery(){
-  if(!photos.length){ showToast('No photos to export yet'); return; }
-
-  const photosJSON = JSON.stringify(photos.map(({id,url,name,filename,category,size,public_id})=>({id,url,name,filename,category,size,public_id})));
-  const currentHTML = document.documentElement.outerHTML;
-  const marker = '// Init\ninitHero();\nbuildCats();\nrenderGallery();\ninitCloudinarySetup();\nloadPhotosFromStorage();';
-  const replacement = `// Init\nphotos = ${photosJSON};\ninitHero();\nbuildCats();\nrenderGallery();\ninitCloudinarySetup();\nupdateHeroWithPhotos();\nupdateStats();`;
-  const injected = currentHTML.replace(marker, replacement);
-  const blob = new Blob([injected], {type:'text/html'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'vista.html';
-  a.click();
-  showToast(`Exported with ${photos.length} photos baked in — push to GitHub!`);
-}
-
-document.getElementById('export-btn').addEventListener('click', exportGallery);
-
 // Init
+checkAdminRoute();
 initHero();
 buildCats();
 renderGallery();
-initCloudinarySetup();
-loadPhotosFromStorage();
+loadPhotos();
 </script>
 </body>
 </html>
