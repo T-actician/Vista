@@ -1,4 +1,5 @@
-const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+const { S3Client, ListObjectsV2Command, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 module.exports = async (req, res) => {
   const s3 = new S3Client({
@@ -11,7 +12,6 @@ module.exports = async (req, res) => {
   });
 
   const bucket = process.env.B2_BUCKET;
-  const base = `https://${bucket}.${process.env.B2_ENDPOINT}`;
 
   async function listAll(prefix) {
     let items = [];
@@ -26,6 +26,10 @@ module.exports = async (req, res) => {
     return items;
   }
 
+  function signedGet(key) {
+    return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: 21600 }); // 6 hours
+  }
+
   try {
     const [photoObjs, thumbObjs] = await Promise.all([
       listAll('photos/'),
@@ -34,20 +38,26 @@ module.exports = async (req, res) => {
 
     const thumbKeys = new Set(thumbObjs.map(o => o.Key.replace('thumbs/', '')));
 
-    const photos = photoObjs.map(o => {
+    const photos = await Promise.all(photoObjs.map(async o => {
       const filename = o.Key.replace('photos/', '');
       const hasThumb = thumbKeys.has(filename);
       const name = filename.replace(/^\d+_/, '').replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+      const [url, thumbUrl] = await Promise.all([
+        signedGet(o.Key),
+        hasThumb ? signedGet(`thumbs/${filename}`) : signedGet(o.Key),
+      ]);
       return {
         id: o.Key,
         filename,
         name,
-        url: `${base}/${o.Key}`,
-        thumbUrl: hasThumb ? `${base}/thumbs/${filename}` : `${base}/${o.Key}`,
+        url,
+        thumbUrl,
         size: o.Size,
         lastModified: o.LastModified,
       };
-    }).sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+    }));
+
+    photos.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
 
     res.status(200).json({ photos });
   } catch (e) {
