@@ -484,6 +484,13 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
     <input id="admin-password" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;margin-bottom:1.25rem;padding:.75rem 1rem;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:.9375rem;outline:none">
     <button id="admin-login-btn" class="btn-primary" style="width:100%">Sign In</button>
     <div id="admin-login-error" style="color:#e07a7a;font-size:.8125rem;margin-top:.75rem;min-height:1.2em"></div>
+    <a href="#" id="admin-forgot-link" style="display:inline-block;margin-top:.5rem;color:var(--text3);font-size:.8125rem;text-decoration:underline">Forgot password?</a>
+  </div>
+  <div id="admin-reset" style="display:none;max-width:360px;margin:15vh auto;padding:2rem;text-align:center">
+    <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.5rem;margin-bottom:1.5rem">Set New Password</h2>
+    <input id="admin-new-password" type="password" placeholder="New password" style="width:100%;margin-bottom:1rem;padding:.75rem 1rem;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:.9375rem;outline:none">
+    <button id="admin-reset-btn" class="btn-primary" style="width:100%">Update Password</button>
+    <div id="admin-reset-error" style="color:#e07a7a;font-size:.8125rem;margin-top:.75rem;min-height:1.2em"></div>
   </div>
   <div id="admin-dashboard" style="display:none;max-width:600px;margin:8vh auto;padding:0 1.5rem">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2rem;flex-wrap:wrap;gap:1rem">
@@ -1016,19 +1023,65 @@ async function refreshAdminUI(){
 }
 
 document.getElementById('admin-login-btn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('admin-login-btn');
   const email = document.getElementById('admin-email').value.trim();
   const password = document.getElementById('admin-password').value;
   const errEl = document.getElementById('admin-login-error');
+  errEl.style.color = '#e07a7a';
   errEl.textContent = '';
+  btn.disabled = true; btn.textContent = 'Signing in…';
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
-  if(error){ errEl.textContent = error.message; return; }
-  if(data.user.id !== ADMIN_UID){ errEl.textContent = 'Not authorized'; await sb.auth.signOut(); return; }
+  if(error){ errEl.textContent = error.message; btn.disabled=false; btn.textContent='Sign In'; return; }
+  if(data.user.id !== ADMIN_UID){ errEl.textContent = 'Not authorized'; await sb.auth.signOut(); btn.disabled=false; btn.textContent='Sign In'; return; }
+  btn.disabled = false; btn.textContent = 'Sign In';
   refreshAdminUI();
 });
 
 document.getElementById('admin-signout-btn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('admin-signout-btn');
+  btn.disabled = true; btn.textContent = 'Signing out…';
   await sb.auth.signOut();
+  btn.disabled = false; btn.textContent = 'Sign Out';
   refreshAdminUI();
+});
+
+document.getElementById('admin-forgot-link').addEventListener('click', async (e)=>{
+  e.preventDefault();
+  const email = document.getElementById('admin-email').value.trim();
+  const errEl = document.getElementById('admin-login-error');
+  if(!email){ errEl.textContent = 'Enter your email above first'; return; }
+  errEl.textContent = '';
+  const link = document.getElementById('admin-forgot-link');
+  link.textContent = 'Sending…';
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/' });
+  link.textContent = 'Forgot password?';
+  errEl.style.color = error ? '#e07a7a' : 'var(--accent)';
+  errEl.textContent = error ? error.message : 'Reset link sent — check your email';
+});
+
+document.getElementById('admin-reset-btn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('admin-reset-btn');
+  const pw = document.getElementById('admin-new-password').value;
+  const errEl = document.getElementById('admin-reset-error');
+  if(!pw || pw.length<6){ errEl.textContent = 'Password must be at least 6 characters'; return; }
+  btn.disabled = true; btn.textContent = 'Updating…';
+  const { error } = await sb.auth.updateUser({ password: pw });
+  btn.disabled = false; btn.textContent = 'Update Password';
+  if(error){ errEl.textContent = error.message; return; }
+  document.getElementById('admin-reset').style.display = 'none';
+  showToast('Password updated — signed in');
+  refreshAdminUI();
+});
+
+// Supabase redirects here with a recovery session after the reset-password email link is clicked
+sb.auth.onAuthStateChange((event)=>{
+  if(event === 'PASSWORD_RECOVERY'){
+    location.hash = '#/admin';
+    document.body.classList.add('admin-mode');
+    document.getElementById('admin-login').style.display = 'none';
+    document.getElementById('admin-dashboard').style.display = 'none';
+    document.getElementById('admin-reset').style.display = 'block';
+  }
 });
 
 // Shrink a source image to a small JPEG thumbnail entirely client-side
