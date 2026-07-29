@@ -49,29 +49,24 @@ nav{position:fixed;top:0;left:0;right:0;z-index:1000;padding:1.25rem 2.5rem;disp
 .hamburger{display:none;background:none;border:none;cursor:pointer;color:var(--text);font-size:1.4rem}
 
 /* HERO */
-#hero{height:100vh;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
-.hero-bg{position:absolute;inset:0;background:var(--bg)}
-.hero-slide{position:absolute;inset:0;opacity:0;transition:opacity 1.8s ease;background-size:cover;background-position:center}
-.hero-slide.active{opacity:1}
-.hero-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.2) 0%,rgba(0,0,0,.45) 60%,rgba(0,0,0,.8) 100%)}
-[data-theme="light"] .hero-overlay{background:linear-gradient(to bottom,rgba(255,255,255,.1) 0%,rgba(255,255,255,.3) 60%,rgba(255,255,255,.7) 100%)}
-.hero-content{position:relative;z-index:2;text-align:center;padding:2rem;max-width:760px}
+#hero{min-height:100vh;position:relative;display:flex;align-items:center;padding:7.5rem 0 3rem}
+.hero-inner{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:3rem;max-width:1360px;margin:0 auto;padding:0 3rem;width:100%}
+.hero-content{max-width:480px}
 .hero-label{display:inline-block;font-size:.6875rem;letter-spacing:.25em;text-transform:uppercase;color:var(--accent);margin-bottom:1.5rem;font-weight:500}
-.hero-title{font-family:'Cormorant Garamond',serif;font-size:clamp(3rem,8vw,6.5rem);font-weight:300;line-height:1.05;letter-spacing:-.01em;margin-bottom:1.5rem;color:var(--text)}
-.hero-title em{font-style:italic;color:var(--accent)}
-.hero-quote{font-size:1rem;color:rgba(240,237,232,0.7);font-style:italic;font-family:'Cormorant Garamond',serif;font-size:1.25rem;line-height:1.6;margin-bottom:2.5rem;max-width:520px;margin-left:auto;margin-right:auto}
-[data-theme="light"] .hero-quote{color:rgba(20,26,61,0.65)}
-.hero-cta{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+.hero-title{font-family:'Cormorant Garamond',serif;font-size:clamp(2.75rem,5.2vw,4.75rem);font-weight:300;line-height:1.08;letter-spacing:-.01em;margin-bottom:1.5rem;color:var(--text)}
+.hero-title em{font-style:normal;color:var(--accent)}
+.hero-desc{font-size:1.0625rem;color:var(--text2);line-height:1.7;max-width:440px;margin-bottom:1.75rem}
+.hero-quote{font-size:1rem;color:var(--text2);opacity:.85;font-style:italic;font-family:'Cormorant Garamond',serif;font-size:1.1875rem;line-height:1.6;margin-bottom:2.25rem;max-width:480px;transition:opacity .4s}
+.hero-cta{display:flex;align-items:center;gap:1.75rem;flex-wrap:wrap}
+.hero-link{color:var(--accent);text-decoration:none;font-size:.875rem;letter-spacing:.06em;font-weight:500;display:inline-flex;align-items:center;gap:.375rem;transition:gap .2s}
+.hero-link:hover{gap:.625rem}
+.hero-image{position:relative;border-radius:var(--radius-lg);overflow:hidden;aspect-ratio:4/3;box-shadow:var(--shadow)}
+.hero-image img{width:100%;height:100%;object-fit:cover;display:block}
 .btn-primary{background:var(--accent);color:#fff;border:none;padding:.75rem 2rem;border-radius:var(--radius-sm);font-size:.875rem;letter-spacing:.08em;cursor:pointer;font-family:'Inter',sans-serif;font-weight:500;transition:var(--transition)}
 .btn-primary:hover{background:var(--accent2);transform:translateY(-1px)}
 .btn-ghost{background:rgba(255,255,255,0.08);color:var(--text);border:1px solid rgba(255,255,255,0.2);padding:.75rem 2rem;border-radius:var(--radius-sm);font-size:.875rem;letter-spacing:.08em;cursor:pointer;font-family:'Inter',sans-serif;transition:var(--transition);backdrop-filter:blur(8px)}
 .btn-ghost:hover{background:rgba(255,255,255,0.15)}
 [data-theme="light"] .btn-ghost{background:rgba(0,0,0,0.06);border-color:rgba(0,0,0,0.2)}
-.hero-dots{position:absolute;bottom:2.5rem;left:50%;transform:translateX(-50%);display:flex;gap:.625rem;z-index:3}
-.dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);cursor:pointer;transition:.3s}
-.dot.active{background:var(--accent);width:24px;border-radius:3px}
-.scroll-hint{position:absolute;bottom:2.5rem;right:2.5rem;z-index:3;display:flex;align-items:center;gap:.5rem;font-size:.6875rem;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,255,255,0.4)}
-.scroll-line{width:40px;height:1px;background:rgba(255,255,255,0.3)}
 
 /* STATS BAR */
 .stats-bar{background:var(--bg2);border-bottom:1px solid var(--border);padding:1.25rem 2.5rem;display:flex;justify-content:center;gap:4rem;flex-wrap:wrap}
@@ -249,6 +244,11 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
 
 /* RESPONSIVE */
 @media(max-width:900px){
+  .hero-inner{grid-template-columns:1fr;gap:2rem;text-align:center;padding:0 1.5rem}
+  .hero-content{order:2;max-width:100%}
+  .hero-image{order:1;aspect-ratio:16/10}
+  .hero-desc,.hero-quote{margin-left:auto;margin-right:auto}
+  .hero-cta{justify-content:center}
   .featured-grid{grid-template-columns:1fr 1fr;grid-template-rows:unset}
   .featured-item:first-child{grid-column:1/3;grid-row:unset}
   .story-grid{grid-template-columns:1fr;gap:2.5rem}
@@ -289,6 +289,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
   #lb-prev{left:.5rem}
   #lb-next{right:.5rem}
   .lb-info{padding:1rem 1.25rem}
+  #hero{padding:6.5rem 0 2.5rem}
   .hero-cta{gap:.625rem}
 }
 @media(prefers-reduced-motion:reduce){*{transition-duration:.01ms!important;animation-duration:.01ms!important}}
@@ -316,19 +317,21 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
 
 <!-- HERO -->
 <section id="hero">
-  <div class="hero-bg" id="hero-bg"></div>
-  <div class="hero-overlay"></div>
-  <div class="hero-content">
-    <span class="hero-label">World-Class Nature Photography</span>
-    <h1 class="hero-title">Where <em>Nature</em><br>Meets Art</h1>
-    <p class="hero-quote" id="hero-quote">"In every walk with nature, one receives far more than he seeks."</p>
-    <div class="hero-cta">
-      <button class="btn-primary" onclick="scrollToGallery()">Explore Gallery</button>
-      <button class="btn-ghost" onclick="document.getElementById('story').scrollIntoView({behavior:'smooth'})">Our Story</button>
+  <div class="hero-inner">
+    <div class="hero-content">
+      <span class="hero-label">World-Class Nature Photography</span>
+      <h1 class="hero-title">Where Nature<br><em>Meets Art</em></h1>
+      <p class="hero-desc">A curated collection of nature's finest moments — preserved in light, color, and emotion.</p>
+      <p class="hero-quote" id="hero-quote">"In every walk with nature, one receives far more than he seeks."</p>
+      <div class="hero-cta">
+        <button class="btn-primary" onclick="scrollToGallery()">Explore Gallery</button>
+        <a href="#story" class="hero-link" onclick="document.getElementById('story').scrollIntoView({behavior:'smooth'});return false;">Our Story <span aria-hidden="true">→</span></a>
+      </div>
+    </div>
+    <div class="hero-image">
+      <img src="assets/hero-flower.jpg" alt="Macro photograph of a blue and white flower" loading="eager">
     </div>
   </div>
-  <div class="hero-dots" id="hero-dots"></div>
-  <div class="scroll-hint"><div class="scroll-line"></div>SCROLL</div>
 </section>
 
 <!-- STATS -->
@@ -649,42 +652,11 @@ const lb_state = {
   // controls hide timer
   hideTimer: null, controlsHidden: false
 };
-let heroSlides = [], heroIndex = 0;
-
-// Hero slides (CSS gradient placeholders — replaced when real photos load)
-const PLACEHOLDER_SLIDES = [
-  'linear-gradient(135deg,#1a2e1a 0%,#2d4a2d 40%,#1a3020 100%)',
-  'linear-gradient(135deg,#0a1520 0%,#1a3050 40%,#0d2040 100%)',
-  'linear-gradient(135deg,#2a1a0a 0%,#4a3010 40%,#3a2510 100%)',
-];
+let heroIndex = 0;
 
 function initHero(){
-  const bg = document.getElementById('hero-bg');
-  PLACEHOLDER_SLIDES.forEach((g,i)=>{
-    const d = document.createElement('div');
-    d.className = 'hero-slide'+(i===0?' active':'');
-    d.style.background = g;
-    bg.appendChild(d);
-  });
-  heroSlides = Array.from(bg.querySelectorAll('.hero-slide'));
-  const dots = document.getElementById('hero-dots');
-  heroSlides.forEach((_,i)=>{
-    const d = document.createElement('div');
-    d.className = 'dot'+(i===0?' active':'');
-    d.onclick = ()=>goHeroSlide(i);
-    dots.appendChild(d);
-  });
-  setInterval(()=>goHeroSlide((heroIndex+1)%heroSlides.length),6000);
   rotateQuote();
   setInterval(rotateQuote,8000);
-}
-
-function goHeroSlide(n){
-  heroSlides[heroIndex].classList.remove('active');
-  document.querySelectorAll('.dot')[heroIndex].classList.remove('active');
-  heroIndex = n;
-  heroSlides[heroIndex].classList.add('active');
-  document.querySelectorAll('.dot')[heroIndex].classList.add('active');
 }
 
 function rotateQuote(){
@@ -692,29 +664,6 @@ function rotateQuote(){
   const text = QUOTES[Math.floor(Math.random()*QUOTES.length)];
   q.style.opacity='0';
   setTimeout(()=>{q.textContent=text;q.style.opacity='1';},400);
-}
-
-function updateHeroWithPhotos(){
-  if(!photos.length) return;
-  const bg = document.getElementById('hero-bg');
-  const dotsEl = document.getElementById('hero-dots');
-  bg.innerHTML='';
-  dotsEl.innerHTML='';
-  const picks = [...photos].sort(()=>Math.random()-.5).slice(0,5);
-  heroSlides = picks.map((p,i)=>{
-    const d = document.createElement('div');
-    d.className = 'hero-slide'+(i===0?' active':'');
-    d.style.backgroundImage = `url(${p.url})`;
-    d.style.backgroundSize = 'cover';
-    d.style.backgroundPosition = 'center';
-    bg.appendChild(d);
-    const dot = document.createElement('div');
-    dot.className = 'dot'+(i===0?' active':'');
-    dot.onclick = ()=>goHeroSlide(i);
-    dotsEl.appendChild(dot);
-    return d;
-  });
-  heroIndex = 0;
 }
 
 // Build categories
@@ -1194,7 +1143,7 @@ async function loadPhotos(){
     const res = await fetch('/api/photos');
     const data = await res.json();
     photos = (data.photos||[]).map(p=>({...p, category:p.category || guessCategory(p.name)}));
-    buildCats(); renderGallery(); updateHeroWithPhotos(); updateStats();
+    buildCats(); renderGallery(); updateStats();
     openSharedPhotoFromUrl();
   }catch(e){
     console.error('Could not load photos', e);
