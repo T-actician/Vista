@@ -423,18 +423,18 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
     </div>
     <div class="footer-col">
       <h4>Explore</h4>
-      <a href="#categories">Mountains</a>
-      <a href="#categories">Oceans</a>
-      <a href="#categories">Forests</a>
-      <a href="#categories">Wildlife</a>
-      <a href="#categories">Sunsets</a>
+      <a href="#categories" onclick="filterCategory('Mountains',event)">Mountains</a>
+      <a href="#categories" onclick="filterCategory('Oceans',event)">Oceans</a>
+      <a href="#categories" onclick="filterCategory('Forests',event)">Forests</a>
+      <a href="#categories" onclick="filterCategory('Wildlife',event)">Wildlife</a>
+      <a href="#categories" onclick="filterCategory('Sunsets',event)">Sunsets</a>
     </div>
     <div class="footer-col">
       <h4>More</h4>
-      <a href="#categories">Waterfalls</a>
-      <a href="#categories">Flowers</a>
-      <a href="#categories">Rivers</a>
-      <a href="#categories">Landscapes</a>
+      <a href="#categories" onclick="filterCategory('Waterfalls',event)">Waterfalls</a>
+      <a href="#categories" onclick="filterCategory('Flowers',event)">Flowers</a>
+      <a href="#categories" onclick="filterCategory('Rivers',event)">Rivers</a>
+      <a href="#categories" onclick="filterCategory('Landscapes',event)">Landscapes</a>
       <a href="#featured">Featured</a>
     </div>
     <div class="footer-col">
@@ -1168,6 +1168,18 @@ function updateStoryImg(){
 
 function scrollToGallery(){
   document.getElementById('gallery').scrollIntoView({behavior:'smooth'});
+}
+
+function filterCategory(cat, e){
+  if(e) e.preventDefault();
+  const count = photos.filter(p=>p.category===cat).length;
+  activeCategory = count>0 ? cat : 'All';
+  buildCats();
+  renderGallery();
+  scrollToGallery();
+  if(count===0){
+    showToast(`No ${cat.toLowerCase()} photos yet — showing all photographs`);
+  }
 }
 
 // Supabase (admin auth) — anon key is safe to expose, it only allows sign-in
