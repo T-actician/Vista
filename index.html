@@ -244,12 +244,14 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
 
 /* HERO — PC FULL-BLEED IMAGE (scoped to desktop only, mobile untouched) */
 @media(min-width:901px){
-  #hero{overflow:hidden}
+  #hero{overflow:hidden;margin:1.5rem 1.5rem 0;border-radius:var(--radius-lg);min-height:calc(100vh - 3rem);padding:8rem 0 4.5rem}
   .hero-inner{display:block;position:relative;z-index:2}
   .hero-image{position:absolute;inset:0;width:100%;height:100%;border-radius:0;box-shadow:none;aspect-ratio:auto;z-index:0}
   .hero-image img{object-position:center}
   #hero::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,var(--bg2) 0%,var(--bg2) 38%,rgba(0,0,0,0) 72%);z-index:1;pointer-events:none}
   .hero-content{position:relative;z-index:2}
+  .hero-title,.hero-desc,.hero-quote{color:#2b2f27!important}
+  .hero-title em{color:var(--accent)!important}
 }
 
 /* RESPONSIVE */
