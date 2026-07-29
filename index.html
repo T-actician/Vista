@@ -132,6 +132,14 @@ section{padding:5rem 2.5rem}
 #admin-view{display:none}
 body.admin-mode>*:not(#admin-view){display:none!important}
 body.admin-mode #admin-view{display:block;min-height:100vh;padding:2rem 1.5rem}
+.admin-tab{background:none;border:none;color:var(--text3);font-family:inherit;font-size:.875rem;padding:.75rem 1rem;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.admin-tab.active{color:var(--text);border-bottom-color:var(--accent)}
+.admin-card{position:relative;border-radius:var(--radius-sm);overflow:hidden;cursor:pointer;aspect-ratio:1;background:var(--surface2)}
+.admin-card img{width:100%;height:100%;object-fit:cover;display:block}
+.admin-card .admin-check{position:absolute;top:.5rem;left:.5rem;width:20px;height:20px;border-radius:5px;border:2px solid rgba(255,255,255,.8);background:rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;font-size:.75rem;color:#fff}
+.admin-card.selected{outline:3px solid var(--accent);outline-offset:-3px}
+.admin-card.selected .admin-check{background:var(--accent);border-color:var(--accent)}
+.admin-card .admin-name{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.65));color:#fff;font-size:.6875rem;padding:1.25rem .5rem .375rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .empty-state{text-align:center;padding:6rem 2rem;color:var(--text3)}
 .empty-icon{font-size:3rem;margin-bottom:1rem;display:block}
@@ -492,7 +500,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
     <button id="admin-reset-btn" class="btn-primary" style="width:100%">Update Password</button>
     <div id="admin-reset-error" style="color:#e07a7a;font-size:.8125rem;margin-top:.75rem;min-height:1.2em"></div>
   </div>
-  <div id="admin-dashboard" style="display:none;max-width:600px;margin:8vh auto;padding:0 1.5rem">
+  <div id="admin-dashboard" style="display:none;max-width:1000px;margin:6vh auto;padding:0 1.5rem 4rem">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2rem;flex-wrap:wrap;gap:1rem">
       <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.75rem">Upload Photos</h2>
       <div style="display:flex;align-items:center;gap:1rem">
@@ -510,10 +518,27 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
     </div>
     <input type="file" id="admin-file-input" accept="image/*" multiple style="display:none">
     <input type="file" id="admin-folder-input" accept="image/*" multiple webkitdirectory style="display:none">
+    <input type="file" id="admin-replace-input" accept="image/*" style="display:none">
     <div id="upload-progress">
       <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
       <div class="progress-text" id="progress-text">Uploading…</div>
     </div>
+
+    <div style="display:flex;align-items:center;gap:.5rem;margin:3rem 0 1.25rem;border-bottom:1px solid var(--border2)">
+      <button class="admin-tab active" id="admin-tab-library" data-tab="library">Library</button>
+      <button class="admin-tab" id="admin-tab-trash" data-tab="trash">Trash</button>
+    </div>
+
+    <div id="admin-action-bar" style="display:none;align-items:center;gap:.75rem;margin-bottom:1.25rem;flex-wrap:wrap">
+      <span id="admin-selected-count" style="font-size:.8125rem;color:var(--text3)"></span>
+      <button id="admin-replace-btn" class="btn-ghost" style="padding:.4rem 1rem;font-size:.8125rem">Replace</button>
+      <button id="admin-trash-btn" class="btn-ghost" style="padding:.4rem 1rem;font-size:.8125rem">Move to Trash</button>
+      <button id="admin-restore-btn" class="btn-ghost" style="padding:.4rem 1rem;font-size:.8125rem;display:none">Restore</button>
+      <button id="admin-delete-perm-btn" class="btn-ghost" style="padding:.4rem 1rem;font-size:.8125rem;display:none;color:#e07a7a">Delete Permanently</button>
+    </div>
+
+    <div id="admin-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.75rem"></div>
+    <div id="admin-grid-empty" style="display:none;text-align:center;color:var(--text3);padding:3rem 0;font-size:.875rem">Nothing here yet.</div>
   </div>
 </div>
 
@@ -1020,6 +1045,7 @@ async function refreshAdminUI(){
   const isAdmin = !!(s && s.user && s.user.id === ADMIN_UID);
   document.getElementById('admin-login').style.display = isAdmin ? 'none' : 'block';
   document.getElementById('admin-dashboard').style.display = isAdmin ? 'block' : 'none';
+  if(isAdmin) loadAdminGrid();
 }
 
 document.getElementById('admin-login-btn').addEventListener('click', async ()=>{
@@ -1136,6 +1162,7 @@ async function handleAdminFiles(files){
 
   setTimeout(()=>{prog.style.display='none';},1000);
   showToast(`${done-failed} uploaded${failed?` — ${failed} failed`:''}`);
+  loadAdminGrid();
 }
 
 document.getElementById('admin-upload-zone').addEventListener('click',()=>document.getElementById('admin-file-input').click());
@@ -1145,6 +1172,116 @@ document.getElementById('admin-folder-input').addEventListener('change',e=>handl
 document.getElementById('admin-upload-zone').addEventListener('dragover',e=>{e.preventDefault();e.currentTarget.classList.add('dragover');});
 document.getElementById('admin-upload-zone').addEventListener('dragleave',e=>e.currentTarget.classList.remove('dragover'));
 document.getElementById('admin-upload-zone').addEventListener('drop',e=>{e.preventDefault();e.currentTarget.classList.remove('dragover');handleAdminFiles(e.dataTransfer.files);});
+
+// ---- Admin manage grid (library + trash) ----
+let adminTab = 'library';
+let adminItems = [];
+let adminSelected = new Set();
+
+async function loadAdminGrid(){
+  const { data:{ session: s } } = await sb.auth.getSession();
+  if(!s) return;
+  const url = adminTab === 'trash' ? '/api/photos?trash=1' : '/api/photos';
+  const res = await fetch(url, { headers: adminTab==='trash' ? { 'Authorization':'Bearer '+s.access_token } : {} });
+  const data = await res.json();
+  adminItems = data.photos || [];
+  adminSelected.clear();
+  renderAdminGrid();
+}
+
+function renderAdminGrid(){
+  const grid = document.getElementById('admin-grid');
+  const empty = document.getElementById('admin-grid-empty');
+  grid.innerHTML = '';
+  empty.style.display = adminItems.length ? 'none' : 'block';
+  adminItems.forEach(p=>{
+    const card = document.createElement('div');
+    card.className = 'admin-card' + (adminSelected.has(p.filename) ? ' selected' : '');
+    card.innerHTML = `<img src="${p.thumbUrl}" loading="lazy" alt=""><div class="admin-check">✓</div><div class="admin-name">${p.name}</div>`;
+    card.addEventListener('click', ()=>{
+      if(adminSelected.has(p.filename)) adminSelected.delete(p.filename);
+      else adminSelected.add(p.filename);
+      renderAdminGrid();
+      updateAdminActionBar();
+    });
+    grid.appendChild(card);
+  });
+}
+
+function updateAdminActionBar(){
+  const bar = document.getElementById('admin-action-bar');
+  const count = adminSelected.size;
+  bar.style.display = count ? 'flex' : 'none';
+  document.getElementById('admin-selected-count').textContent = `${count} selected`;
+  document.getElementById('admin-replace-btn').style.display = count===1 ? 'inline-block' : 'none';
+  document.getElementById('admin-trash-btn').style.display = adminTab==='library' ? 'inline-block' : 'none';
+  document.getElementById('admin-restore-btn').style.display = adminTab==='trash' ? 'inline-block' : 'none';
+  document.getElementById('admin-delete-perm-btn').style.display = adminTab==='trash' ? 'inline-block' : 'none';
+}
+
+document.getElementById('admin-tab-library').addEventListener('click', ()=>{
+  adminTab = 'library';
+  document.getElementById('admin-tab-library').classList.add('active');
+  document.getElementById('admin-tab-trash').classList.remove('active');
+  loadAdminGrid();
+  updateAdminActionBar();
+});
+
+document.getElementById('admin-tab-trash').addEventListener('click', ()=>{
+  adminTab = 'trash';
+  document.getElementById('admin-tab-trash').classList.add('active');
+  document.getElementById('admin-tab-library').classList.remove('active');
+  loadAdminGrid();
+  updateAdminActionBar();
+});
+
+async function runManageAction(action){
+  const { data:{ session: s } } = await sb.auth.getSession();
+  if(!s){ showToast('Session expired — sign in again'); return; }
+  const filenames = Array.from(adminSelected);
+  if(!filenames.length) return;
+  const res = await fetch('/api/manage-photo', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+s.access_token},
+    body: JSON.stringify({ action, filenames })
+  });
+  const data = await res.json();
+  const failed = (data.results||[]).filter(r=>!r.ok).length;
+  showToast(failed ? `Done — ${failed} failed` : 'Done');
+  loadAdminGrid();
+}
+
+document.getElementById('admin-trash-btn').addEventListener('click', ()=>runManageAction('trash'));
+document.getElementById('admin-restore-btn').addEventListener('click', ()=>runManageAction('restore'));
+document.getElementById('admin-delete-perm-btn').addEventListener('click', ()=>{
+  if(confirm(`Permanently delete ${adminSelected.size} photo(s)? This cannot be undone.`)) runManageAction('delete-permanent');
+});
+
+document.getElementById('admin-replace-btn').addEventListener('click', ()=>{
+  if(adminSelected.size!==1) return;
+  document.getElementById('admin-replace-input').click();
+});
+
+document.getElementById('admin-replace-input').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const filename = Array.from(adminSelected)[0];
+  const { data:{ session: s } } = await sb.auth.getSession();
+  if(!s){ showToast('Session expired — sign in again'); return; }
+  const prog = document.getElementById('upload-progress');
+  prog.style.display='block';
+  document.getElementById('progress-text').textContent='Replacing…';
+  try{
+    const displayBlob = await makeResized(file, 2000, 0.85);
+    const thumbBlob = await makeResized(file, 480, 0.72);
+    await uploadBlob(s.access_token, filename, 'photo', displayBlob);
+    await uploadBlob(s.access_token, filename, 'thumb', thumbBlob);
+    showToast('Photo replaced');
+  }catch(err){ showToast('Replace failed'); }
+  prog.style.display='none';
+  e.target.value='';
+  loadAdminGrid();
+});
 
 // Event bindings
 document.getElementById('search-input').addEventListener('input',e=>{searchQ=e.target.value;renderGallery();});
