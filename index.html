@@ -4,11 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VISTA — Nature Photography</title>
+<link rel="icon" href="/assets/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" href="/assets/favicon.png">
 <link rel="apple-touch-icon" href="/assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js" defer></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -515,20 +518,6 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
         <a href="#" id="admin-viewsite-link" style="color:var(--text2);font-size:.875rem;text-decoration:none">View Site</a>
         <button id="admin-signout-btn" class="btn-ghost" style="padding:.5rem 1.25rem">Sign Out</button>
       </div>
-    </div>
-    <div style="margin-bottom:1rem;text-align:left">
-      <label for="admin-upload-category" style="display:block;font-size:.8125rem;color:var(--text3);margin-bottom:.375rem">Category for these photos</label>
-      <select id="admin-upload-category" style="width:100%;padding:.65rem .75rem;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:.875rem">
-        <option value="Mountains">Mountains</option>
-        <option value="Oceans">Oceans</option>
-        <option value="Forests">Forests</option>
-        <option value="Wildlife">Wildlife</option>
-        <option value="Sunsets">Sunsets</option>
-        <option value="Waterfalls">Waterfalls</option>
-        <option value="Flowers">Flowers</option>
-        <option value="Rivers">Rivers</option>
-        <option value="Landscapes" selected>Landscapes</option>
-      </select>
     </div>
     <div class="upload-zone" id="admin-upload-zone">
       <span class="upload-icon">🌿</span>
@@ -1208,6 +1197,102 @@ async function makeResized(file, maxW, quality){
   return new Promise(resolve=>canvas.toBlob(resolve, 'image/jpeg', quality));
 }
 
+// ---- Free, local, zero-cost photo content classification ----
+// Uses a pretrained MobileNet model (runs entirely in the browser, no API key, no server cost)
+// plus a pixel-color heuristic fallback for categories MobileNet doesn't cover directly.
+let mobilenetModel = null;
+async function getMobilenetModel(){
+  if(mobilenetModel) return mobilenetModel;
+  if(typeof mobilenet === 'undefined') return null;
+  try{ mobilenetModel = await mobilenet.load({version:2, alpha:1.0}); }
+  catch(e){ mobilenetModel = null; }
+  return mobilenetModel;
+}
+
+const MOUNTAIN_KEYWORDS = ['alp','volcano','valley','cliff','promontory'];
+const OCEAN_KEYWORDS = ['seashore','sandbar','coral reef'];
+const RIVER_KEYWORDS = ['lakeside','lakeshore','geyser'];
+const FLOWER_KEYWORDS = ['daisy',"yellow lady's slipper"];
+const WILDLIFE_KEYWORDS = [
+  'dog','terrier','retriever','spaniel','hound','poodle','shepherd','mastiff','bulldog','corgi','collie',
+  'cat','tabby','lion','tiger','leopard','cheetah','jaguar','wolf','fox','bear','panda',
+  'deer','elk','moose','antelope','gazelle','bison','buffalo','ram','ox','impala',
+  'monkey','ape','gorilla','chimpanzee','orangutan','baboon','gibbon',
+  'bird','eagle','hawk','owl','falcon','vulture','crane','stork','heron','pelican','flamingo',
+  'swan','goose','duck','parrot','peacock','ostrich','penguin','hummingbird','jay','magpie','robin',
+  'fish','shark','whale','dolphin','seal','sea lion','turtle','tortoise','crocodile','alligator',
+  'lizard','iguana','snake','frog','salamander','newt',
+  'butterfly','dragonfly','beetle','spider','ant','bee','grasshopper','cricket','moth',
+  'zebra','giraffe','elephant','rhinoceros','hippopotamus','kangaroo','koala','sloth',
+  'otter','raccoon','skunk','hedgehog','porcupine','squirrel','chipmunk','rabbit','hare','beaver','weasel','badger'
+];
+
+function classNameMatches(className, list){
+  const n = className.toLowerCase();
+  return list.some(k=>n.includes(k));
+}
+
+function blobToImage(blob){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.onload = ()=>resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(blob);
+  });
+}
+
+// Pixel-based fallback: samples the image on a small canvas and reasons about
+// dominant hues (green→forest, warm sky→sunset, blue+foam→waterfall/ocean, high saturation→flower)
+function colorHeuristicCategory(imgEl){
+  const canvas = document.createElement('canvas');
+  const w = canvas.width = 64, h = canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(imgEl, 0, 0, w, h);
+  const data = ctx.getImageData(0,0,w,h).data;
+
+  let rSum=0,gSum=0,bSum=0,satSum=0,n=0,brightWhiteN=0;
+  let skyR=0,skyG=0,skyB=0,skyN=0;
+
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      const i=(y*w+x)*4;
+      const r=data[i], g=data[i+1], b=data[i+2];
+      rSum+=r; gSum+=g; bSum+=b; n++;
+      const max=Math.max(r,g,b), min=Math.min(r,g,b);
+      satSum += max ? (max-min)/max : 0;
+      if(r>230 && g>230 && b>230) brightWhiteN++;
+      if(y < h*0.3){ skyR+=r; skyG+=g; skyB+=b; skyN++; }
+    }
+  }
+  const avgR=rSum/n, avgG=gSum/n, avgB=bSum/n, avgSat=satSum/n;
+  const skyAvgR=skyR/skyN, skyAvgB=skyB/skyN;
+
+  if(skyAvgR > skyAvgB + 25 && skyAvgR > 140) return 'Sunsets';
+  if(avgB > avgR + 10 && avgB > avgG){
+    return (brightWhiteN/n > 0.12) ? 'Waterfalls' : 'Oceans';
+  }
+  if(avgG > avgR + 8 && avgG > avgB + 8) return 'Forests';
+  if(avgSat > 0.55) return 'Flowers';
+  return 'Landscapes';
+}
+
+async function classifyByContent(imgEl){
+  const model = await getMobilenetModel();
+  if(model){
+    try{
+      const preds = await model.classify(imgEl, 15);
+      for(const p of preds){
+        if(classNameMatches(p.className, MOUNTAIN_KEYWORDS)) return 'Mountains';
+        if(classNameMatches(p.className, OCEAN_KEYWORDS)) return 'Oceans';
+        if(classNameMatches(p.className, RIVER_KEYWORDS)) return 'Rivers';
+        if(classNameMatches(p.className, FLOWER_KEYWORDS)) return 'Flowers';
+        if(classNameMatches(p.className, WILDLIFE_KEYWORDS)) return 'Wildlife';
+      }
+    } catch(e){ /* fall through to color heuristic */ }
+  }
+  return colorHeuristicCategory(imgEl);
+}
+
 async function uploadBlob(token, filename, kind, blob){
   const res = await fetch(`/api/upload?filename=${encodeURIComponent(filename)}&kind=${kind}`, {
     method: 'POST',
@@ -1229,15 +1314,17 @@ async function handleAdminFiles(files){
   prog.style.display='block';
   let done=0, failed=0;
 
-  const category = document.getElementById('admin-upload-category').value || 'Landscapes';
-
   for(let i=0;i<arr.length;i++){
     const file = arr[i];
     try{
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_').replace(/\.[^.]+$/,'');
-      const baseName = `${category}__${Date.now()}_${i}_${safeName}.jpg`;
       const displayBlob = await makeResized(file, 3200, 0.9);
       const thumbBlob = await makeResized(file, 480, 0.72);
+      document.getElementById('progress-text').textContent=`Analyzing ${i+1} of ${arr.length}…`;
+      const imgEl = await blobToImage(thumbBlob);
+      const category = await classifyByContent(imgEl);
+      URL.revokeObjectURL(imgEl.src);
+      const baseName = `${category}__${Date.now()}_${i}_${safeName}.jpg`;
       await uploadBlob(token, baseName, 'photo', displayBlob);
       await uploadBlob(token, baseName, 'thumb', thumbBlob);
     } catch(e){ failed++; }
@@ -1361,7 +1448,8 @@ async function runManageAction(action, btn, extra){
   if(!filenames.length) return;
 
   const originalText = btn ? btn.textContent : '';
-  if(btn){ btn.disabled = true; btn.textContent = 'Working…'; }
+  const loadingText = action==='delete-permanent' ? 'Deleting…' : action==='trash' ? 'Moving…' : action==='restore' ? 'Restoring…' : 'Working…';
+  if(btn){ btn.disabled = true; btn.textContent = loadingText; }
 
   const res = await fetch('/api/manage-photo', {
     method:'POST',
@@ -1386,8 +1474,9 @@ async function runManageAction(action, btn, extra){
 document.getElementById('admin-trash-btn').addEventListener('click', (e)=>runManageAction('trash', e.currentTarget));
 document.getElementById('admin-restore-btn').addEventListener('click', (e)=>runManageAction('restore', e.currentTarget));
 document.getElementById('admin-delete-perm-btn').addEventListener('click', async (e)=>{
+  const btn = e.currentTarget;
   const ok = await siteConfirm(`Permanently delete ${adminSelected.size} photo(s)? This cannot be undone.`);
-  if(ok) runManageAction('delete-permanent', e.currentTarget);
+  if(ok) runManageAction('delete-permanent', btn);
 });
 document.getElementById('admin-category-select').addEventListener('change', async (e)=>{
   const category = e.target.value;
