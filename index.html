@@ -20,9 +20,9 @@
   --transition:all 0.4s cubic-bezier(0.23,1,0.32,1);
 }
 [data-theme="light"]{
-  --bg:#ffffff;--bg2:#eef1fc;--bg3:#e1e7fa;--surface:rgba(30,58,224,0.045);--surface2:rgba(30,58,224,0.09);
+  --bg:linear-gradient(160deg,#ffffff 0%,#eef2fd 45%,#d9e3fa 100%);--bg2:#eef1fc;--bg3:#dde6fa;--surface:rgba(30,58,224,0.05);--surface2:rgba(30,58,224,0.09);
   --glass:rgba(255,255,255,0.85);--glass2:rgba(255,255,255,0.96);
-  --text:#141a3d;--text2:#33409a;--text3:#7d87c2;
+  --text:#12162c;--text2:#454d70;--text3:#8991bb;
   --accent:#1e3ae0;--accent2:#132b9e;--gold:#3355e8;
   --border:rgba(30,58,224,0.14);--border2:rgba(30,58,224,0.24);
 }
@@ -1198,8 +1198,9 @@ let adminSelected = new Set();
 async function loadAdminGrid(){
   const { data:{ session: s } } = await sb.auth.getSession();
   if(!s) return;
-  const url = adminTab === 'trash' ? '/api/photos?trash=1' : '/api/photos';
-  const res = await fetch(url, { headers: adminTab==='trash' ? { 'Authorization':'Bearer '+s.access_token } : {} });
+  const base = adminTab === 'trash' ? '/api/photos?trash=1' : '/api/photos';
+  const url = base + (base.includes('?') ? '&' : '?') + '_t=' + Date.now();
+  const res = await fetch(url, { cache:'no-store', headers: adminTab==='trash' ? { 'Authorization':'Bearer '+s.access_token } : {} });
   const data = await res.json();
   adminItems = data.photos || [];
   adminSelected.clear();
@@ -1264,11 +1265,15 @@ document.getElementById('admin-tab-trash').addEventListener('click', ()=>{
   updateAdminActionBar();
 });
 
-async function runManageAction(action){
+async function runManageAction(action, btn){
   const { data:{ session: s } } = await sb.auth.getSession();
   if(!s){ showToast('Session expired — sign in again'); return; }
   const filenames = Array.from(adminSelected);
   if(!filenames.length) return;
+
+  const originalText = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = 'Working…'; }
+
   const res = await fetch('/api/manage-photo', {
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+s.access_token},
@@ -1277,14 +1282,22 @@ async function runManageAction(action){
   const data = await res.json();
   const failedItems = (data.results||[]).filter(r=>!r.ok);
   if(failedItems.length) console.error('manage-photo failures:', failedItems);
-  showToast(failedItems.length ? `Done — ${failedItems.length} failed` : 'Done');
+  showToast(failedItems.length ? `Done — ${failedItems.length} failed` : (action==='restore' ? 'Restored to Library' : action==='trash' ? 'Moved to Trash' : 'Permanently deleted'));
+
+  if(btn){ btn.disabled = false; btn.textContent = originalText; }
+
+  if(action === 'restore'){
+    adminTab = 'library';
+    document.getElementById('admin-tab-library').classList.add('active');
+    document.getElementById('admin-tab-trash').classList.remove('active');
+  }
   loadAdminGrid();
 }
 
-document.getElementById('admin-trash-btn').addEventListener('click', ()=>runManageAction('trash'));
-document.getElementById('admin-restore-btn').addEventListener('click', ()=>runManageAction('restore'));
-document.getElementById('admin-delete-perm-btn').addEventListener('click', ()=>{
-  if(confirm(`Permanently delete ${adminSelected.size} photo(s)? This cannot be undone.`)) runManageAction('delete-permanent');
+document.getElementById('admin-trash-btn').addEventListener('click', (e)=>runManageAction('trash', e.currentTarget));
+document.getElementById('admin-restore-btn').addEventListener('click', (e)=>runManageAction('restore', e.currentTarget));
+document.getElementById('admin-delete-perm-btn').addEventListener('click', (e)=>{
+  if(confirm(`Permanently delete ${adminSelected.size} photo(s)? This cannot be undone.`)) runManageAction('delete-permanent', e.currentTarget);
 });
 
 document.getElementById('admin-replace-btn').addEventListener('click', ()=>{
