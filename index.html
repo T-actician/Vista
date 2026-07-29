@@ -131,7 +131,7 @@ section{padding:5rem 2.5rem}
 
 /* ADMIN ROUTE (#/admin) */
 #admin-view{display:none}
-body.admin-mode>*:not(#admin-view){display:none!important}
+body.admin-mode>*:not(#admin-view):not(#toast):not(#confirm-modal){display:none!important}
 body.admin-mode #admin-view{display:block;min-height:100vh;padding:2rem 1.5rem}
 .admin-tab{background:none;border:none;color:var(--text3);font-family:inherit;font-size:.875rem;padding:.75rem 1rem;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
 .admin-tab.active{color:var(--text);border-bottom-color:var(--accent)}
