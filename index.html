@@ -1148,6 +1148,9 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const ADMIN_UID = 'e97ea8cf-813c-4fb1-8cbc-b1da380a91d3';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Detect a password-recovery link synchronously from the raw URL, before any session/UI logic runs
+let isPasswordRecovery = /type=recovery/.test(location.hash) || /type=recovery/.test(location.search);
+
 // Public gallery — always sourced fresh from the B2 bucket via /api/photos
 async function loadPhotos(){
   try{
@@ -1168,7 +1171,7 @@ function formatSize(b){
 
 // ---- Admin (#/admin) ----
 function checkAdminRoute(){
-  if(location.hash === '#/admin'){
+  if(location.hash === '#/admin' || isPasswordRecovery){
     document.body.classList.add('admin-mode');
     refreshAdminUI(); refreshAdminQuicklink();
   } else {
@@ -1180,7 +1183,7 @@ window.addEventListener('hashchange', checkAdminRoute);
 
 async function refreshAdminQuicklink(){
   const { data:{ session: s } } = await sb.auth.getSession();
-  const isAdmin = !!(s && s.user && s.user.id === ADMIN_UID);
+  const isAdmin = !!(s && s.user && s.user.id === ADMIN_UID) && !isPasswordRecovery;
   document.getElementById('admin-quicklink').style.display = isAdmin ? 'inline-block' : 'none';
 }
 
@@ -1218,6 +1221,12 @@ function siteConfirm(message){
 }
 
 async function refreshAdminUI(){
+  if(isPasswordRecovery){
+    document.getElementById('admin-login').style.display = 'none';
+    document.getElementById('admin-dashboard').style.display = 'none';
+    document.getElementById('admin-reset').style.display = 'block';
+    return;
+  }
   const { data:{ session: s } } = await sb.auth.getSession();
   const isAdmin = !!(s && s.user && s.user.id === ADMIN_UID);
   document.getElementById('admin-login').style.display = isAdmin ? 'none' : 'block';
@@ -1228,7 +1237,7 @@ async function refreshAdminUI(){
 document.getElementById('admin-login-btn').addEventListener('click', async ()=>{
   const btn = document.getElementById('admin-login-btn');
   const email = document.getElementById('admin-email').value.trim();
-  const password = document.getElementById('admin-password').value;
+  const password = document.getElementById('admin-password').value.trim();
   const errEl = document.getElementById('admin-login-error');
   errEl.style.color = '#e07a7a';
   errEl.textContent = '';
@@ -1264,26 +1273,38 @@ document.getElementById('admin-forgot-link').addEventListener('click', async (e)
 
 document.getElementById('admin-reset-btn').addEventListener('click', async ()=>{
   const btn = document.getElementById('admin-reset-btn');
-  const pw = document.getElementById('admin-new-password').value;
+  const pw = document.getElementById('admin-new-password').value.trim();
   const errEl = document.getElementById('admin-reset-error');
   if(!pw || pw.length<6){ errEl.textContent = 'Password must be at least 6 characters'; return; }
   btn.disabled = true; btn.textContent = 'Updating…';
-  const { error } = await sb.auth.updateUser({ password: pw });
-  btn.disabled = false; btn.textContent = 'Update Password';
-  if(error){ errEl.textContent = error.message; return; }
+  const { data, error } = await sb.auth.updateUser({ password: pw });
+  if(error){ errEl.textContent = error.message; btn.disabled = false; btn.textContent = 'Update Password'; return; }
+
+  const email = data && data.user ? data.user.email : '';
+  await sb.auth.signOut();
+  isPasswordRecovery = false;
+  history.replaceState(null, '', location.pathname + '#/admin');
+
+  document.getElementById('admin-new-password').value = '';
   document.getElementById('admin-reset').style.display = 'none';
-  showToast('Password updated — signed in');
-  refreshAdminUI(); refreshAdminQuicklink();
+  document.getElementById('admin-dashboard').style.display = 'none';
+  document.getElementById('admin-login').style.display = 'block';
+  if(email) document.getElementById('admin-email').value = email;
+  const loginErrEl = document.getElementById('admin-login-error');
+  loginErrEl.style.color = 'var(--accent)';
+  loginErrEl.textContent = 'Password updated — please sign in with your new password';
+
+  btn.disabled = false; btn.textContent = 'Update Password';
+  refreshAdminQuicklink();
 });
 
 // Supabase redirects here with a recovery session after the reset-password email link is clicked
 sb.auth.onAuthStateChange((event)=>{
   if(event === 'PASSWORD_RECOVERY'){
+    isPasswordRecovery = true;
     location.hash = '#/admin';
     document.body.classList.add('admin-mode');
-    document.getElementById('admin-login').style.display = 'none';
-    document.getElementById('admin-dashboard').style.display = 'none';
-    document.getElementById('admin-reset').style.display = 'block';
+    refreshAdminUI();
   }
 });
 
