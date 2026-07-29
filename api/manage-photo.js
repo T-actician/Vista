@@ -21,13 +21,18 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { action, filenames } = req.body || {};
+  const { action, filenames, category, location } = req.body || {};
   if (!action || !Array.isArray(filenames) || !filenames.length) {
     res.status(400).json({ error: 'action and filenames[] required' });
     return;
   }
-  if (!['trash', 'restore', 'delete-permanent'].includes(action)) {
+  if (!['trash', 'restore', 'delete-permanent', 'recategorize'].includes(action)) {
     res.status(400).json({ error: 'invalid action' });
+    return;
+  }
+  const CAT_LIST = ['Mountains', 'Oceans', 'Forests', 'Wildlife', 'Sunsets', 'Waterfalls', 'Flowers', 'Rivers', 'Landscapes'];
+  if (action === 'recategorize' && !CAT_LIST.includes(category)) {
+    res.status(400).json({ error: 'invalid category' });
     return;
   }
 
@@ -69,6 +74,16 @@ module.exports = async (req, res) => {
           s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `trash/photos/${safe}` })),
           s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `trash/thumbs/${safe}` })).catch(()=>{}),
         ]);
+      } else if (action === 'recategorize') {
+        const base = location === 'trash' ? 'trash/' : '';
+        const stripped = safe.replace(/^[A-Za-z]+__/, '');
+        const newSafe = `${category}__${stripped}`;
+        if (newSafe !== safe) {
+          await Promise.all([
+            moveOne(`${base}photos/${safe}`, `${base}photos/${newSafe}`),
+            moveOne(`${base}thumbs/${safe}`, `${base}thumbs/${newSafe}`).catch(()=>{}),
+          ]);
+        }
       }
       return { name: rawName, ok: true };
     } catch (e) {

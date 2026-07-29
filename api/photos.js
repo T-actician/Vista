@@ -2,6 +2,8 @@ const { S3Client, ListObjectsV2Command, GetObjectCommand } = require('@aws-sdk/c
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { createClient } = require('@supabase/supabase-js');
 
+const CAT_LIST = ['Mountains','Oceans','Forests','Wildlife','Sunsets','Waterfalls','Flowers','Rivers','Landscapes'];
+
 module.exports = async (req, res) => {
   const wantsTrash = req.query && req.query.trash === '1';
 
@@ -67,7 +69,14 @@ module.exports = async (req, res) => {
     const photos = await Promise.all(photoObjs.map(async o => {
       const filename = o.Key.replace(photoPrefix, '');
       const hasThumb = thumbKeys.has(filename);
-      const name = filename.replace(/^\d+_/, '').replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+      const catMatch = filename.match(/^([A-Za-z]+)__(.+)$/);
+      let category = 'Landscapes';
+      let rest = filename;
+      if (catMatch && CAT_LIST.includes(catMatch[1])) {
+        category = catMatch[1];
+        rest = catMatch[2];
+      }
+      const name = rest.replace(/^\d+_/, '').replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
       const [url, thumbUrl] = await Promise.all([
         signedGet(o.Key),
         hasThumb ? signedGet(`${thumbPrefix}${filename}`) : signedGet(o.Key),
@@ -76,6 +85,7 @@ module.exports = async (req, res) => {
         id: o.Key,
         filename,
         name,
+        category,
         url,
         thumbUrl,
         size: o.Size,

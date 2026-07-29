@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VISTA — Nature Photography</title>
+<link rel="icon" type="image/png" href="/assets/favicon.png">
+<link rel="apple-touch-icon" href="/assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -514,6 +516,20 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
         <button id="admin-signout-btn" class="btn-ghost" style="padding:.5rem 1.25rem">Sign Out</button>
       </div>
     </div>
+    <div style="margin-bottom:1rem;text-align:left">
+      <label for="admin-upload-category" style="display:block;font-size:.8125rem;color:var(--text3);margin-bottom:.375rem">Category for these photos</label>
+      <select id="admin-upload-category" style="width:100%;padding:.65rem .75rem;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:.875rem">
+        <option value="Mountains">Mountains</option>
+        <option value="Oceans">Oceans</option>
+        <option value="Forests">Forests</option>
+        <option value="Wildlife">Wildlife</option>
+        <option value="Sunsets">Sunsets</option>
+        <option value="Waterfalls">Waterfalls</option>
+        <option value="Flowers">Flowers</option>
+        <option value="Rivers">Rivers</option>
+        <option value="Landscapes" selected>Landscapes</option>
+      </select>
+    </div>
     <div class="upload-zone" id="admin-upload-zone">
       <span class="upload-icon">🌿</span>
       <div class="upload-title">Drop photos here</div>
@@ -542,6 +558,18 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
       <button id="admin-trash-btn" class="btn-ghost" style="padding:.4rem 1rem;font-size:.8125rem">Move to Trash</button>
       <button id="admin-restore-btn" class="btn-ghost" style="padding:.4rem 1rem;font-size:.8125rem;display:none">Restore</button>
       <button id="admin-delete-perm-btn" class="btn-ghost" style="padding:.4rem 1rem;font-size:.8125rem;display:none;color:#e07a7a">Delete Permanently</button>
+      <select id="admin-category-select" style="padding:.4rem .75rem;font-size:.8125rem;display:none;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit">
+        <option value="">Set category…</option>
+        <option value="Mountains">Mountains</option>
+        <option value="Oceans">Oceans</option>
+        <option value="Forests">Forests</option>
+        <option value="Wildlife">Wildlife</option>
+        <option value="Sunsets">Sunsets</option>
+        <option value="Waterfalls">Waterfalls</option>
+        <option value="Flowers">Flowers</option>
+        <option value="Rivers">Rivers</option>
+        <option value="Landscapes">Landscapes</option>
+      </select>
     </div>
 
     <div id="admin-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.75rem"></div>
@@ -1035,7 +1063,7 @@ async function loadPhotos(){
   try{
     const res = await fetch('/api/photos');
     const data = await res.json();
-    photos = (data.photos||[]).map(p=>({...p, category:guessCategory(p.name)}));
+    photos = (data.photos||[]).map(p=>({...p, category:p.category || guessCategory(p.name)}));
     buildCats(); renderGallery(); updateHeroWithPhotos(); updateStats();
   }catch(e){
     console.error('Could not load photos', e);
@@ -1201,11 +1229,13 @@ async function handleAdminFiles(files){
   prog.style.display='block';
   let done=0, failed=0;
 
+  const category = document.getElementById('admin-upload-category').value || 'Landscapes';
+
   for(let i=0;i<arr.length;i++){
     const file = arr[i];
     try{
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_').replace(/\.[^.]+$/,'');
-      const baseName = `${Date.now()}_${i}_${safeName}.jpg`;
+      const baseName = `${category}__${Date.now()}_${i}_${safeName}.jpg`;
       const displayBlob = await makeResized(file, 3200, 0.9);
       const thumbBlob = await makeResized(file, 480, 0.72);
       await uploadBlob(token, baseName, 'photo', displayBlob);
@@ -1273,7 +1303,7 @@ function renderAdminGrid(){
   adminItems.forEach(p=>{
     const card = document.createElement('div');
     card.className = 'admin-card' + (adminSelected.has(p.filename) ? ' selected' : '');
-    card.innerHTML = `<img src="${p.thumbUrl}" loading="lazy" alt=""><div class="admin-check">✓</div><div class="admin-name">${p.name}</div>`;
+    card.innerHTML = `<img src="${p.thumbUrl}" loading="lazy" alt=""><div class="admin-check">✓</div><div class="admin-name">${p.name}</div><div class="admin-name" style="opacity:.6;font-size:.6875rem">${p.category}</div>`;
     card.addEventListener('click', ()=>{
       if(adminSelected.has(p.filename)) adminSelected.delete(p.filename);
       else adminSelected.add(p.filename);
@@ -1294,6 +1324,7 @@ function updateAdminActionBar(){
   document.getElementById('admin-trash-btn').style.display = (adminTab==='library' && count) ? 'inline-block' : 'none';
   document.getElementById('admin-restore-btn').style.display = (adminTab==='trash' && count) ? 'inline-block' : 'none';
   document.getElementById('admin-delete-perm-btn').style.display = (adminTab==='trash' && count) ? 'inline-block' : 'none';
+  document.getElementById('admin-category-select').style.display = count ? 'inline-block' : 'none';
 }
 
 document.getElementById('admin-selectall-btn').addEventListener('click', ()=>{
@@ -1322,7 +1353,8 @@ document.getElementById('admin-tab-trash').addEventListener('click', ()=>{
   updateAdminActionBar();
 });
 
-async function runManageAction(action, btn){
+async function runManageAction(action, btn, extra){
+  extra = extra || {};
   const { data:{ session: s } } = await sb.auth.getSession();
   if(!s){ showToast('Session expired — sign in again'); return; }
   const filenames = Array.from(adminSelected);
@@ -1334,12 +1366,12 @@ async function runManageAction(action, btn){
   const res = await fetch('/api/manage-photo', {
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+s.access_token},
-    body: JSON.stringify({ action, filenames })
+    body: JSON.stringify({ action, filenames, ...extra })
   });
   const data = await res.json();
   const failedItems = (data.results||[]).filter(r=>!r.ok);
   if(failedItems.length) console.error('manage-photo failures:', failedItems);
-  showToast(failedItems.length ? `Done — ${failedItems.length} failed` : (action==='restore' ? 'Restored to Library' : action==='trash' ? 'Moved to Trash' : 'Permanently deleted'));
+  showToast(failedItems.length ? `Done — ${failedItems.length} failed` : (action==='restore' ? 'Restored to Library' : action==='trash' ? 'Moved to Trash' : action==='recategorize' ? 'Category updated' : 'Permanently deleted'));
 
   if(btn){ btn.disabled = false; btn.textContent = originalText; }
 
@@ -1356,6 +1388,12 @@ document.getElementById('admin-restore-btn').addEventListener('click', (e)=>runM
 document.getElementById('admin-delete-perm-btn').addEventListener('click', async (e)=>{
   const ok = await siteConfirm(`Permanently delete ${adminSelected.size} photo(s)? This cannot be undone.`);
   if(ok) runManageAction('delete-permanent', e.currentTarget);
+});
+document.getElementById('admin-category-select').addEventListener('change', async (e)=>{
+  const category = e.target.value;
+  if(!category) return;
+  await runManageAction('recategorize', null, {category, location: adminTab});
+  e.target.value = '';
 });
 
 document.getElementById('admin-replace-btn').addEventListener('click', ()=>{
