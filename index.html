@@ -538,10 +538,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
     <input type="file" id="admin-replace-input" accept="image/*" style="display:none">
     <div id="upload-progress">
       <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem">
-        <div class="progress-text" id="progress-text">Uploading…</div>
-        <button id="cancel-upload-btn" class="btn-ghost" style="padding:.25rem .75rem;font-size:.75rem">Cancel</button>
-      </div>
+      <div class="progress-text" id="progress-text">Uploading…</div>
     </div>
 
     <div style="display:flex;align-items:center;gap:.5rem;margin:3rem 0 1.25rem;border-bottom:1px solid var(--border2)">
@@ -1467,8 +1464,6 @@ async function uploadBlob(token, filename, kind, blob){
   if(!data.ok) throw new Error(data.error || 'upload failed');
 }
 
-let uploadCancelled = false;
-
 async function handleAdminFiles(files){
   const arr = Array.from(files).filter(f=>f.type.startsWith('image/'));
   if(!arr.length){ showToast('No images found'); return; }
@@ -1476,7 +1471,6 @@ async function handleAdminFiles(files){
   if(!s){ showToast('Session expired — sign in again'); return; }
   const token = s.access_token;
 
-  uploadCancelled = false;
   const prog = document.getElementById('upload-progress');
   prog.style.display='block';
   let done=0, failed=0, duplicates=0;
@@ -1487,10 +1481,7 @@ async function handleAdminFiles(files){
     existingHashes = await hr.json();
   } catch(e){ /* if this fails, uploads still proceed without dedup */ }
 
-  const newHashes = {};
-
   for(let i=0;i<arr.length;i++){
-    if(uploadCancelled) break;
     const file = arr[i];
     try{
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_').replace(/\.[^.]+$/,'');
@@ -1518,7 +1509,11 @@ async function handleAdminFiles(files){
       await uploadBlob(token, baseName, 'thumb', thumbBlob);
 
       existingHashes[baseName] = hash;
-      newHashes[baseName] = hash;
+      await fetch('/api/hashes', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+        body: JSON.stringify({ set: { [baseName]: hash } })
+      });
     } catch(e){ failed++; }
 
     done++;
@@ -1527,23 +1522,11 @@ async function handleAdminFiles(files){
     document.getElementById('progress-text').textContent=`Uploaded ${done} of ${arr.length}…`;
   }
 
-  if(Object.keys(newHashes).length){
-    try{
-      await fetch('/api/hashes', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
-        body: JSON.stringify({ set: newHashes })
-      });
-    } catch(e){ /* hashes just won't be recorded for this batch */ }
-  }
-
   setTimeout(()=>{prog.style.display='none';},1000);
-  const uploadedCount = done-failed-duplicates;
-  showToast(`${uploadCancelled?'Cancelled — ':''}${uploadedCount} uploaded${duplicates?`, ${duplicates} duplicate skipped`:''}${failed?`, ${failed} failed`:''}`);
+  showToast(`${done-failed-duplicates} uploaded${duplicates?`, ${duplicates} duplicate skipped`:''}${failed?`, ${failed} failed`:''}`);
   loadAdminGrid();
 }
 
-document.getElementById('cancel-upload-btn').addEventListener('click',()=>{ uploadCancelled = true; });
 document.getElementById('admin-upload-zone').addEventListener('click',()=>document.getElementById('admin-file-input').click());
 document.getElementById('admin-folder-btn').addEventListener('click',()=>document.getElementById('admin-folder-input').click());
 document.getElementById('admin-file-input').addEventListener('change',e=>handleAdminFiles(e.target.files));
@@ -1931,7 +1914,7 @@ document.addEventListener('mouseup',()=>{
     if(ts.pinching){
       ts.pinching = false;
       if(ts.scale <= 1){ ts.scale=1; ts.tx=0; ts.ty=0; applyTransform(false); }
-      // sync lb_state
+      // sync lb_state...
       lb_state.scale=ts.scale; lb_state.x=ts.tx; lb_state.y=ts.ty;
       lbShowControls(); lbScheduleHide();
       return;
