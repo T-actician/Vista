@@ -189,9 +189,7 @@ body.admin-mode #admin-view{display:block;min-height:100vh;padding:2rem 1.5rem}
 .featured-item:not(:first-child) img{min-height:230px}
 .featured-item:hover img{transform:scale(1.04)}
 .featured-label{position:absolute;top:.875rem;left:.875rem;background:rgba(0,0,0,.5);backdrop-filter:blur(8px);color:#fff;border-radius:100px;padding:.25rem .75rem;font-size:.625rem;letter-spacing:.12em;text-transform:uppercase;border:1px solid rgba(255,255,255,.15)}
-.featured-item-info{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(to top,rgba(0,0,0,.85),transparent);padding:1.25rem;opacity:0;transition:opacity .35s}
-.featured-item:hover .featured-item-info{opacity:1}
-.fi-name{font-family:'Cormorant Garamond',serif;font-size:1.0625rem;color:#fff}
+.featured-item:hover .card-overlay{opacity:1}
 
 /* STORY */
 #story{background:var(--bg)}
@@ -210,11 +208,8 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
 .footer-col h4{font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--text3);margin-bottom:1rem;font-weight:500}
 .footer-col a{display:block;color:var(--text2);text-decoration:none;font-size:.875rem;margin-bottom:.625rem;transition:color .2s}
 .footer-col a:hover{color:var(--accent)}
-.footer-bottom{border-top:1px solid var(--border);padding-top:1.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;max-width:1100px;margin:0 auto}
+.footer-bottom{border-top:1px solid var(--border);padding-top:1.5rem;display:flex;justify-content:center;align-items:center;text-align:center;flex-wrap:wrap;gap:1rem;max-width:1100px;margin:0 auto}
 .footer-bottom p{font-size:.8125rem;color:var(--text3)}
-.social-links{display:flex;gap:.75rem}
-.social-links a{color:var(--text3);text-decoration:none;font-size:.875rem;transition:color .2s}
-.social-links a:hover{color:var(--accent)}
 
 /* TOAST */
 #toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(20px);background:var(--glass2);border:1px solid var(--border2);backdrop-filter:blur(16px);color:var(--text);padding:.75rem 1.5rem;border-radius:100px;font-size:.875rem;opacity:0;transition:.4s;z-index:3000;pointer-events:none;white-space:nowrap}
@@ -448,12 +443,6 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
   </div>
   <div class="footer-bottom">
     <p>© 2026 VISTA Photography — All rights reserved</p>
-    <div class="social-links">
-      <a href="#">Instagram</a>
-      <a href="#">Unsplash</a>
-      <a href="#">500px</a>
-      <a href="#">Pinterest</a>
-    </div>
   </div>
 </footer>
 
@@ -783,10 +772,9 @@ function makeCard(p){
     <div class="card-overlay">
       <div class="card-actions">
         <button class="ca" onclick="openLightbox(${photos.indexOf(p)},event)">View</button>
-        <button class="ca" onclick="downloadPhoto(${photos.indexOf(p)},event)">↓ Save</button>
+        <button class="ca" onclick="downloadPhoto(${photos.indexOf(p)},event)">↓ Download</button>
         <button class="ca" onclick="sharePhoto(${photos.indexOf(p)},event)">Share</button>
         <button class="ca fav-btn${isFav?' loved':''}" data-id="${p.id}" onclick="toggleFav('${p.id}',this,event)">${isFav?'♥ Saved':'🤍 Save'}</button>
-        <button class="ca" onclick="openLightbox(${photos.indexOf(p)},event)" style="opacity:.8">⛶</button>
       </div>
     </div>`);
   card.addEventListener('click',e=>{
@@ -998,24 +986,38 @@ async function downloadPhoto(idx, e){
   if(e) e.stopPropagation();
   const p = photos[idx];
   showToast('Downloading '+p.name+'…');
-  try{
-    const res = await fetch(p.url);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = p.filename||p.name+'.jpg'; a.click();
-    setTimeout(()=>URL.revokeObjectURL(url),10000);
-  } catch(err){
-    const a = document.createElement('a');
-    a.href = p.url; a.download = p.filename||p.name+'.jpg'; a.target='_blank'; a.click();
-  }
+  const a = document.createElement('a');
+  a.href = p.downloadUrl || p.url;
+  a.download = p.filename || p.name + '.jpg';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function photoShareUrl(p){
+  return `${location.origin}${location.pathname}?photo=${encodeURIComponent(p.id)}`;
 }
 
 function sharePhoto(idx, e){
   if(e) e.stopPropagation();
   const p = photos[idx];
-  if(navigator.clipboard) navigator.clipboard.writeText(p.name).then(()=>showToast('Photo name copied — share away!'));
-  else showToast('Share: '+p.name);
+  const shareUrl = photoShareUrl(p);
+  if(navigator.share){
+    navigator.share({ title: p.name, url: shareUrl }).catch(()=>{});
+  } else if(navigator.clipboard){
+    navigator.clipboard.writeText(shareUrl).then(()=>showToast('Link copied — share away!'));
+  } else {
+    showToast(shareUrl);
+  }
+}
+
+function openSharedPhotoFromUrl(){
+  const params = new URLSearchParams(location.search);
+  const id = params.get('photo');
+  if(!id || !photos.length) return;
+  const idx = photos.findIndex(p=>p.id===id);
+  if(idx>-1) openLightbox(idx);
 }
 
 function showToast(msg){
@@ -1035,12 +1037,23 @@ function updateFeatured(){
   if(!photos.length) return;
   const grid = document.getElementById('featured-grid');
   const picks = [...photos].sort(()=>Math.random()-.5).slice(0,5);
-  grid.innerHTML = picks.map((p,i)=>`
-    <div class="featured-item" onclick="openLightbox(${photos.indexOf(p)})">
+  grid.innerHTML = picks.map((p,i)=>{
+    const idx = photos.indexOf(p);
+    const isFav = favorites.has(p.id);
+    return `
+    <div class="featured-item" onclick="openLightbox(${idx},event)">
       <img src="${p.url}" alt="${p.name}">
       <div class="featured-label">${p.category}</div>
-      <div class="featured-item-info"><div class="fi-name">${p.name}</div></div>
-    </div>`).join('');
+      <div class="card-overlay">
+        <div class="card-actions">
+          <button class="ca" onclick="openLightbox(${idx},event)">View</button>
+          <button class="ca" onclick="downloadPhoto(${idx},event)">↓ Download</button>
+          <button class="ca" onclick="sharePhoto(${idx},event)">Share</button>
+          <button class="ca fav-btn${isFav?' loved':''}" data-id="${p.id}" onclick="toggleFav('${p.id}',this,event)">${isFav?'♥ Saved':'🤍 Save'}</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function updateStoryImg(){
@@ -1066,6 +1079,7 @@ async function loadPhotos(){
     const data = await res.json();
     photos = (data.photos||[]).map(p=>({...p, category:p.category || guessCategory(p.name)}));
     buildCats(); renderGallery(); updateHeroWithPhotos(); updateStats();
+    openSharedPhotoFromUrl();
   }catch(e){
     console.error('Could not load photos', e);
   }

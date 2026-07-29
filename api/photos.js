@@ -52,9 +52,12 @@ module.exports = async (req, res) => {
   const bucketMs = 10 * 60 * 1000;
   const signingDate = new Date(Math.floor(Date.now() / bucketMs) * bucketMs);
 
-  function signedGet(key) {
+  function signedGet(key, downloadName) {
     return getSignedUrl(s3, new GetObjectCommand({
-      Bucket: bucket, Key: key, ResponseCacheControl: 'public, max-age=21600',
+      Bucket: bucket,
+      Key: key,
+      ResponseCacheControl: 'public, max-age=21600',
+      ...(downloadName ? { ResponseContentDisposition: `attachment; filename="${downloadName}"` } : {}),
     }), { expiresIn: 21600, signingDate }); // 6 hours
   }
 
@@ -77,9 +80,12 @@ module.exports = async (req, res) => {
         rest = catMatch[2];
       }
       const name = rest.replace(/^\d+_/, '').replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
-      const [url, thumbUrl] = await Promise.all([
+      const ext = (filename.match(/\.[^.]+$/) || ['.jpg'])[0];
+      const downloadName = `${name.replace(/[^a-z0-9 ]/gi, '').trim() || 'vista-photo'}${ext}`;
+      const [url, thumbUrl, downloadUrl] = await Promise.all([
         signedGet(o.Key),
         hasThumb ? signedGet(`${thumbPrefix}${filename}`) : signedGet(o.Key),
+        signedGet(o.Key, downloadName),
       ]);
       return {
         id: o.Key,
@@ -88,6 +94,7 @@ module.exports = async (req, res) => {
         category,
         url,
         thumbUrl,
+        downloadUrl,
         size: o.Size,
         lastModified: o.LastModified,
       };
