@@ -123,7 +123,6 @@ section{padding:5rem 2.5rem}
 .masonry-item:hover img{transform:translateZ(0) scale(1.04)}
 .card-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.75) 0%,transparent 50%);opacity:0;transition:opacity .4s;display:flex;flex-direction:column;justify-content:flex-end;padding:1.125rem;z-index:3}
 .masonry-item:hover .card-overlay{opacity:1}
-.card-name{font-family:'Cormorant Garamond',serif;font-size:1.0625rem;font-weight:400;color:#fff;margin-bottom:.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card-actions{display:flex;gap:.5rem;flex-wrap:wrap}
 .ca{background:rgba(255,255,255,0.15);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:100px;padding:.3rem .75rem;font-size:.6875rem;letter-spacing:.06em;cursor:pointer;transition:.2s;font-family:'Inter',sans-serif}
 .ca:hover{background:rgba(255,255,255,0.3)}
@@ -782,7 +781,6 @@ function makeCard(p){
   card.insertAdjacentHTML('beforeend',`
     <div class="img-cat-badge">${p.category}</div>
     <div class="card-overlay">
-      <div class="card-name">${p.name}</div>
       <div class="card-actions">
         <button class="ca" onclick="openLightbox(${photos.indexOf(p)},event)">View</button>
         <button class="ca" onclick="downloadPhoto(${photos.indexOf(p)},event)">↓ Save</button>
@@ -797,11 +795,24 @@ function makeCard(p){
   return card;
 }
 
+// Resolves a free-text search query to a matching category via keyword synonyms,
+// so things like "cute flower" or "big mountains" correctly find the right category
+// even when the photo name itself doesn't contain those exact words.
+function smartCategoryFromQuery(q){
+  const words = q.toLowerCase().split(/\s+/).filter(w=>w.length>=3);
+  for(const [cat,kws] of Object.entries(CAT_KEYWORDS)){
+    if(words.some(w=>kws.some(k=>k.includes(w) || w.includes(k)))) return cat;
+  }
+  return null;
+}
+
 function renderGallery(){
   const grid = document.getElementById('masonry-grid');
+  const q = searchQ.trim().toLowerCase();
+  const smartCat = q ? smartCategoryFromQuery(q) : null;
   let filtered = photos.filter(p=>{
     const catMatch = activeCategory==='All' || p.category===activeCategory;
-    const searchMatch = !searchQ || p.name.toLowerCase().includes(searchQ.toLowerCase()) || p.category.toLowerCase().includes(searchQ.toLowerCase());
+    const searchMatch = !q || p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q) || p.category === smartCat;
     return catMatch && searchMatch;
   });
   if(sortMode==='name') filtered.sort((a,b)=>a.name.localeCompare(b.name));
@@ -810,7 +821,8 @@ function renderGallery(){
   document.getElementById('gallery-count').textContent = `${filtered.length} photograph${filtered.length!==1?'s':''}`;
 
   if(!filtered.length){
-    grid.innerHTML = `<div class="empty-state" id="empty-state"><span class="empty-icon">🏔️</span><div class="empty-title">${photos.length?'No results found':'Your gallery awaits'}</div><p style="color:var(--text3);font-size:.875rem;margin-top:.5rem">${photos.length?'Try a different search or category':'Upload nature photographs to begin your visual journey'}</p></div>`;
+    const hint = 'Not found — try searching mountains, oceans, forests, wildlife, sunsets, waterfalls, flowers, rivers, or landscapes';
+    grid.innerHTML = `<div class="empty-state" id="empty-state"><span class="empty-icon">🏔️</span><div class="empty-title">${photos.length?'No results found':'Your gallery awaits'}</div><p style="color:var(--text3);font-size:.875rem;margin-top:.5rem">${photos.length?hint:'Upload nature photographs to begin your visual journey'}</p></div>`;
     return;
   }
 
@@ -1760,7 +1772,7 @@ document.addEventListener('mouseup',()=>{
   };
 })();
 
-// Init...
+// Init
 checkAdminRoute();
 initHero();
 buildCats();
