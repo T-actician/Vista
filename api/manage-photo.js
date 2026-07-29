@@ -76,17 +76,17 @@ module.exports = async (req, res) => {
     try {
       if (action === 'trash') {
         await Promise.all([
-          moveOne(`photos/${safe}`, `trash/photos/${safe}`).catch(()=>{}),
+          moveOne(`photos/${safe}`, `trash/photos/${safe}`),
           moveOne(`thumbs/${safe}`, `trash/thumbs/${safe}`).catch(()=>{}),
         ]);
       } else if (action === 'restore') {
         await Promise.all([
-          moveOne(`trash/photos/${safe}`, `photos/${safe}`).catch(()=>{}),
+          moveOne(`trash/photos/${safe}`, `photos/${safe}`),
           moveOne(`trash/thumbs/${safe}`, `thumbs/${safe}`).catch(()=>{}),
         ]);
       } else if (action === 'delete-permanent') {
         await Promise.all([
-          s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `trash/photos/${safe}` })).catch(()=>{}),
+          s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `trash/photos/${safe}` })),
           s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `trash/thumbs/${safe}` })).catch(()=>{}),
         ]);
         await updateManifest(m => { delete m[safe]; });

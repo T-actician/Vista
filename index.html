@@ -1481,6 +1481,8 @@ async function handleAdminFiles(files){
     existingHashes = await hr.json();
   } catch(e){ /* if this fails, uploads still proceed without dedup */ }
 
+  const newHashes = {};
+
   for(let i=0;i<arr.length;i++){
     const file = arr[i];
     try{
@@ -1509,17 +1511,23 @@ async function handleAdminFiles(files){
       await uploadBlob(token, baseName, 'thumb', thumbBlob);
 
       existingHashes[baseName] = hash;
-      await fetch('/api/hashes', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
-        body: JSON.stringify({ set: { [baseName]: hash } })
-      });
+      newHashes[baseName] = hash;
     } catch(e){ failed++; }
 
     done++;
     const pct = Math.round(done/arr.length*100);
     document.getElementById('progress-fill').style.width=pct+'%';
     document.getElementById('progress-text').textContent=`Uploaded ${done} of ${arr.length}…`;
+  }
+
+  if(Object.keys(newHashes).length){
+    try{
+      await fetch('/api/hashes', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+        body: JSON.stringify({ set: newHashes })
+      });
+    } catch(e){ /* hashes just won't be recorded for this batch */ }
   }
 
   setTimeout(()=>{prog.style.display='none';},1000);
@@ -1914,7 +1922,7 @@ document.addEventListener('mouseup',()=>{
     if(ts.pinching){
       ts.pinching = false;
       if(ts.scale <= 1){ ts.scale=1; ts.tx=0; ts.ty=0; applyTransform(false); }
-      // sync lb_state...
+      // sync lb_state
       lb_state.scale=ts.scale; lb_state.x=ts.tx; lb_state.y=ts.ty;
       lbShowControls(); lbScheduleHide();
       return;
