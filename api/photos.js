@@ -9,6 +9,7 @@ module.exports = async (req, res) => {
       accessKeyId: process.env.B2_KEY_ID,
       secretAccessKey: process.env.B2_APP_KEY,
     },
+    requestChecksumCalculation: 'WHEN_REQUIRED',
   });
 
   const bucket = process.env.B2_BUCKET;
