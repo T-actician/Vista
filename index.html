@@ -1084,8 +1084,8 @@ sb.auth.onAuthStateChange((event)=>{
   }
 });
 
-// Shrink a source image to a small JPEG thumbnail entirely client-side
-async function makeThumbnail(file, maxW=480){
+// Shrink a source image client-side to a JPEG at the given max width/quality
+async function makeResized(file, maxW, quality){
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, maxW / bitmap.width);
   const w = Math.max(1, Math.round(bitmap.width*scale));
@@ -1093,19 +1093,17 @@ async function makeThumbnail(file, maxW=480){
   const canvas = document.createElement('canvas');
   canvas.width = w; canvas.height = h;
   canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
-  return new Promise(resolve=>canvas.toBlob(resolve, 'image/jpeg', 0.72));
+  return new Promise(resolve=>canvas.toBlob(resolve, 'image/jpeg', quality));
 }
 
-async function signAndPut(token, baseName, contentType, kind, blob){
-  const res = await fetch('/api/sign-upload', {
+async function uploadBlob(token, filename, kind, blob){
+  const res = await fetch(`/api/upload?filename=${encodeURIComponent(filename)}&kind=${kind}`, {
     method: 'POST',
-    headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
-    body: JSON.stringify({ filename: baseName, contentType, kind })
+    headers: { 'Content-Type': blob.type || 'application/octet-stream', 'Authorization': 'Bearer '+token },
+    body: blob
   });
   const data = await res.json();
-  if(!data.uploadUrl) throw new Error(data.error || 'sign failed');
-  await fetch(data.uploadUrl, { method:'PUT', headers:{'Content-Type':contentType}, body: blob });
-  return data.publicUrl;
+  if(!data.ok) throw new Error(data.error || 'upload failed');
 }
 
 async function handleAdminFiles(files){
@@ -1122,11 +1120,12 @@ async function handleAdminFiles(files){
   for(let i=0;i<arr.length;i++){
     const file = arr[i];
     try{
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
-      const baseName = `${Date.now()}_${i}_${safeName}`;
-      const thumbBlob = await makeThumbnail(file);
-      await signAndPut(token, baseName, file.type, 'photo', file);
-      await signAndPut(token, baseName, 'image/jpeg', 'thumb', thumbBlob);
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_').replace(/\.[^.]+$/,'');
+      const baseName = `${Date.now()}_${i}_${safeName}.jpg`;
+      const displayBlob = await makeResized(file, 2000, 0.85);
+      const thumbBlob = await makeResized(file, 480, 0.72);
+      await uploadBlob(token, baseName, 'photo', displayBlob);
+      await uploadBlob(token, baseName, 'thumb', thumbBlob);
     } catch(e){ failed++; }
 
     done++;

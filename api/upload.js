@@ -1,6 +1,16 @@
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { createClient } = require('@supabase/supabase-js');
+
+module.exports.config = { api: { bodyParser: false } };
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -26,19 +36,22 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { filename, contentType, kind } = req.body || {};
-  if (!filename || !contentType) {
-    res.status(400).json({ error: 'filename and contentType required' });
-    return;
-  }
-  if (kind !== 'photo' && kind !== 'thumb') {
-    res.status(400).json({ error: 'kind must be photo or thumb' });
+  const { filename, kind } = req.query;
+  if (!filename || (kind !== 'photo' && kind !== 'thumb')) {
+    res.status(400).json({ error: 'filename and valid kind required' });
     return;
   }
 
-  const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const contentType = req.headers['content-type'] || 'application/octet-stream';
+  const safeName = String(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
   const prefix = kind === 'thumb' ? 'thumbs/' : 'photos/';
   const key = `${prefix}${safeName}`;
+
+  const body = await readBody(req);
+  if (body.length > 4_400_000) {
+    res.status(413).json({ error: 'File too large (max ~4.3MB after resize)' });
+    return;
+  }
 
   const s3 = new S3Client({
     region: 'auto',
@@ -50,14 +63,15 @@ module.exports = async (req, res) => {
     requestChecksumCalculation: 'WHEN_REQUIRED',
   });
 
-  const command = new PutObjectCommand({
-    Bucket: process.env.B2_BUCKET,
-    Key: key,
-    ContentType: contentType,
-  });
-
-  const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 600 });
-  const publicUrl = `https://${process.env.B2_BUCKET}.${process.env.B2_ENDPOINT}/${key}`;
-
-  res.status(200).json({ uploadUrl, publicUrl, key });
+  try {
+    await s3.send(new PutObjectCommand({
+      Bucket: process.env.B2_BUCKET,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }));
+    res.status(200).json({ ok: true, key });
+  } catch (e) {
+    res.status(500).json({ error: 'Upload failed', detail: String(e) });
+  }
 };
