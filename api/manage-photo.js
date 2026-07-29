@@ -51,25 +51,30 @@ module.exports = async (req, res) => {
     await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: fromKey }));
   }
 
-  const results = [];
-  for (const rawName of filenames) {
+  const results = await Promise.all(filenames.map(async rawName => {
     const safe = String(rawName).replace(/[^a-zA-Z0-9._-]/g, '_');
     try {
       if (action === 'trash') {
-        await moveOne(`photos/${safe}`, `trash/photos/${safe}`);
-        try { await moveOne(`thumbs/${safe}`, `trash/thumbs/${safe}`); } catch (e) {}
+        await Promise.all([
+          moveOne(`photos/${safe}`, `trash/photos/${safe}`),
+          moveOne(`thumbs/${safe}`, `trash/thumbs/${safe}`).catch(()=>{}),
+        ]);
       } else if (action === 'restore') {
-        await moveOne(`trash/photos/${safe}`, `photos/${safe}`);
-        try { await moveOne(`trash/thumbs/${safe}`, `thumbs/${safe}`); } catch (e) {}
+        await Promise.all([
+          moveOne(`trash/photos/${safe}`, `photos/${safe}`),
+          moveOne(`trash/thumbs/${safe}`, `thumbs/${safe}`).catch(()=>{}),
+        ]);
       } else if (action === 'delete-permanent') {
-        await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `trash/photos/${safe}` }));
-        try { await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `trash/thumbs/${safe}` })); } catch (e) {}
+        await Promise.all([
+          s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `trash/photos/${safe}` })),
+          s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `trash/thumbs/${safe}` })).catch(()=>{}),
+        ]);
       }
-      results.push({ name: rawName, ok: true });
+      return { name: rawName, ok: true };
     } catch (e) {
-      results.push({ name: rawName, ok: false, error: String(e) });
+      return { name: rawName, ok: false, error: String(e) };
     }
-  }
+  }));
 
   res.status(200).json({ results });
 };

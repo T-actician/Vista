@@ -1195,17 +1195,33 @@ let adminTab = 'library';
 let adminItems = [];
 let adminSelected = new Set();
 
-async function loadAdminGrid(){
+let adminCache = {};
+
+async function fetchAdminList(tab){
   const { data:{ session: s } } = await sb.auth.getSession();
-  if(!s) return;
-  const base = adminTab === 'trash' ? '/api/photos?trash=1' : '/api/photos';
+  if(!s) return [];
+  const base = tab === 'trash' ? '/api/photos?trash=1' : '/api/photos';
   const url = base + (base.includes('?') ? '&' : '?') + '_t=' + Date.now();
-  const res = await fetch(url, { cache:'no-store', headers: adminTab==='trash' ? { 'Authorization':'Bearer '+s.access_token } : {} });
+  const res = await fetch(url, { cache:'no-store', headers: tab==='trash' ? { 'Authorization':'Bearer '+s.access_token } : {} });
   const data = await res.json();
-  adminItems = data.photos || [];
+  return data.photos || [];
+}
+
+async function loadAdminGrid(){
+  const tab = adminTab;
   adminSelected.clear();
-  renderAdminGrid();
-  updateAdminActionBar();
+  if(adminCache[tab]){
+    adminItems = adminCache[tab];
+    renderAdminGrid();
+    updateAdminActionBar();
+  }
+  const items = await fetchAdminList(tab);
+  adminCache[tab] = items;
+  if(adminTab === tab){
+    adminItems = items;
+    renderAdminGrid();
+    updateAdminActionBar();
+  }
 }
 
 function renderAdminGrid(){

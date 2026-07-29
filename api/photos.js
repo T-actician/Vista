@@ -51,9 +51,6 @@ module.exports = async (req, res) => {
   }
 
   try {
-    if (!wantsTrash) {
-      res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=600');
-    }
     const [photoObjs, thumbObjs] = await Promise.all([
       listAll(photoPrefix),
       listAll(thumbPrefix),
