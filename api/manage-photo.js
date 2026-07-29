@@ -56,6 +56,21 @@ module.exports = async (req, res) => {
     await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: fromKey }));
   }
 
+  const HASH_KEY = 'meta/photo-hashes.json';
+  async function updateManifest(mutate) {
+    let manifest = {};
+    try {
+      const out = await s3.send(new (require('@aws-sdk/client-s3').GetObjectCommand)({ Bucket: bucket, Key: HASH_KEY }));
+      const chunks = [];
+      for await (const c of out.Body) chunks.push(c);
+      manifest = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    } catch (e) { /* no manifest yet */ }
+    mutate(manifest);
+    await s3.send(new (require('@aws-sdk/client-s3').PutObjectCommand)({
+      Bucket: bucket, Key: HASH_KEY, Body: JSON.stringify(manifest), ContentType: 'application/json',
+    }));
+  }
+
   const results = await Promise.all(filenames.map(async rawName => {
     const safe = String(rawName).replace(/[^a-zA-Z0-9._-]/g, '_');
     try {
@@ -74,6 +89,7 @@ module.exports = async (req, res) => {
           s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `trash/photos/${safe}` })),
           s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `trash/thumbs/${safe}` })).catch(()=>{}),
         ]);
+        await updateManifest(m => { delete m[safe]; });
       } else if (action === 'recategorize') {
         const base = location === 'trash' ? 'trash/' : '';
         const stripped = safe.replace(/^[A-Za-z]+__/, '');
@@ -83,6 +99,7 @@ module.exports = async (req, res) => {
             moveOne(`${base}photos/${safe}`, `${base}photos/${newSafe}`),
             moveOne(`${base}thumbs/${safe}`, `${base}thumbs/${newSafe}`).catch(()=>{}),
           ]);
+          await updateManifest(m => { if (m[safe] !== undefined) { m[newSafe] = m[safe]; delete m[safe]; } });
         }
       }
       return { name: rawName, ok: true };
