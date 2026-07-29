@@ -45,10 +45,15 @@ module.exports = async (req, res) => {
   }
 
   function signedGet(key) {
-    return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: 21600 }); // 6 hours
+    return getSignedUrl(s3, new GetObjectCommand({
+      Bucket: bucket, Key: key, ResponseCacheControl: 'public, max-age=21600',
+    }), { expiresIn: 21600 }); // 6 hours
   }
 
   try {
+    if (!wantsTrash) {
+      res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=600');
+    }
     const [photoObjs, thumbObjs] = await Promise.all([
       listAll(photoPrefix),
       listAll(thumbPrefix),

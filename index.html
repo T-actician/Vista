@@ -219,6 +219,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
 .img-loader{background:var(--surface2);animation:shimmer 1.5s infinite}
 @keyframes shimmer{0%{opacity:.6}50%{opacity:1}100%{opacity:.6}}
 /* Placeholder while image lazy-loads */
+.masonry-item.img-loading{aspect-ratio:1;min-height:160px}
 .masonry-item.img-loading::before{
   content:'';display:block;position:absolute;inset:0;
   background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);
@@ -303,6 +304,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
     <a href="#story">Stories</a>
   </div>
   <div class="nav-actions">
+    <a href="#/admin" id="admin-quicklink" style="display:none;font-size:.8125rem;color:var(--accent);border:1px solid var(--accent);border-radius:20px;padding:.375rem .875rem;text-decoration:none;white-space:nowrap">Admin</a>
     <button class="btn-icon" id="search-toggle" title="Search" aria-label="Search">🔍</button>
     <button class="btn-icon" id="fav-toggle" title="Favorites" aria-label="Favorites">🤍</button>
     <button class="btn-icon" id="theme-toggle" title="Toggle theme" aria-label="Toggle theme">☀️</button>
@@ -504,7 +506,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2rem;flex-wrap:wrap;gap:1rem">
       <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.75rem">Upload Photos</h2>
       <div style="display:flex;align-items:center;gap:1rem">
-        <a href="#" style="color:var(--text2);font-size:.875rem;text-decoration:none">View Site</a>
+        <a href="#" id="admin-viewsite-link" style="color:var(--text2);font-size:.875rem;text-decoration:none">View Site</a>
         <button id="admin-signout-btn" class="btn-ghost" style="padding:.5rem 1.25rem">Sign Out</button>
       </div>
     </div>
@@ -531,6 +533,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
 
     <div id="admin-action-bar" style="display:none;align-items:center;gap:.75rem;margin-bottom:1.25rem;flex-wrap:wrap">
       <span id="admin-selected-count" style="font-size:.8125rem;color:var(--text3)"></span>
+      <button id="admin-selectall-btn" class="btn-ghost" style="padding:.4rem 1rem;font-size:.8125rem">Select All</button>
       <button id="admin-replace-btn" class="btn-ghost" style="padding:.4rem 1rem;font-size:.8125rem">Replace</button>
       <button id="admin-trash-btn" class="btn-ghost" style="padding:.4rem 1rem;font-size:.8125rem">Move to Trash</button>
       <button id="admin-restore-btn" class="btn-ghost" style="padding:.4rem 1rem;font-size:.8125rem;display:none">Restore</button>
@@ -1033,12 +1036,25 @@ function formatSize(b){
 function checkAdminRoute(){
   if(location.hash === '#/admin'){
     document.body.classList.add('admin-mode');
-    refreshAdminUI();
+    refreshAdminUI(); refreshAdminQuicklink();
   } else {
     document.body.classList.remove('admin-mode');
   }
+  refreshAdminQuicklink();
 }
 window.addEventListener('hashchange', checkAdminRoute);
+
+async function refreshAdminQuicklink(){
+  const { data:{ session: s } } = await sb.auth.getSession();
+  const isAdmin = !!(s && s.user && s.user.id === ADMIN_UID);
+  document.getElementById('admin-quicklink').style.display = isAdmin ? 'inline-block' : 'none';
+}
+
+document.getElementById('admin-viewsite-link').addEventListener('click', (e)=>{
+  e.preventDefault();
+  location.hash = '';
+  checkAdminRoute();
+});
 
 async function refreshAdminUI(){
   const { data:{ session: s } } = await sb.auth.getSession();
@@ -1060,7 +1076,7 @@ document.getElementById('admin-login-btn').addEventListener('click', async ()=>{
   if(error){ errEl.textContent = error.message; btn.disabled=false; btn.textContent='Sign In'; return; }
   if(data.user.id !== ADMIN_UID){ errEl.textContent = 'Not authorized'; await sb.auth.signOut(); btn.disabled=false; btn.textContent='Sign In'; return; }
   btn.disabled = false; btn.textContent = 'Sign In';
-  refreshAdminUI();
+  refreshAdminUI(); refreshAdminQuicklink();
 });
 
 document.getElementById('admin-signout-btn').addEventListener('click', async ()=>{
@@ -1068,7 +1084,7 @@ document.getElementById('admin-signout-btn').addEventListener('click', async ()=
   btn.disabled = true; btn.textContent = 'Signing out…';
   await sb.auth.signOut();
   btn.disabled = false; btn.textContent = 'Sign Out';
-  refreshAdminUI();
+  refreshAdminUI(); refreshAdminQuicklink();
 });
 
 document.getElementById('admin-forgot-link').addEventListener('click', async (e)=>{
@@ -1096,7 +1112,7 @@ document.getElementById('admin-reset-btn').addEventListener('click', async ()=>{
   if(error){ errEl.textContent = error.message; return; }
   document.getElementById('admin-reset').style.display = 'none';
   showToast('Password updated — signed in');
-  refreshAdminUI();
+  refreshAdminUI(); refreshAdminQuicklink();
 });
 
 // Supabase redirects here with a recovery session after the reset-password email link is clicked
@@ -1148,7 +1164,7 @@ async function handleAdminFiles(files){
     try{
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_').replace(/\.[^.]+$/,'');
       const baseName = `${Date.now()}_${i}_${safeName}.jpg`;
-      const displayBlob = await makeResized(file, 2000, 0.85);
+      const displayBlob = await makeResized(file, 3200, 0.9);
       const thumbBlob = await makeResized(file, 480, 0.72);
       await uploadBlob(token, baseName, 'photo', displayBlob);
       await uploadBlob(token, baseName, 'thumb', thumbBlob);
@@ -1187,6 +1203,7 @@ async function loadAdminGrid(){
   adminItems = data.photos || [];
   adminSelected.clear();
   renderAdminGrid();
+  updateAdminActionBar();
 }
 
 function renderAdminGrid(){
@@ -1211,13 +1228,24 @@ function renderAdminGrid(){
 function updateAdminActionBar(){
   const bar = document.getElementById('admin-action-bar');
   const count = adminSelected.size;
-  bar.style.display = count ? 'flex' : 'none';
-  document.getElementById('admin-selected-count').textContent = `${count} selected`;
+  bar.style.display = 'flex';
+  document.getElementById('admin-selected-count').textContent = count ? `${count} selected` : '';
+  document.getElementById('admin-selectall-btn').textContent = (adminItems.length && count===adminItems.length) ? 'Deselect All' : 'Select All';
   document.getElementById('admin-replace-btn').style.display = count===1 ? 'inline-block' : 'none';
-  document.getElementById('admin-trash-btn').style.display = adminTab==='library' ? 'inline-block' : 'none';
-  document.getElementById('admin-restore-btn').style.display = adminTab==='trash' ? 'inline-block' : 'none';
-  document.getElementById('admin-delete-perm-btn').style.display = adminTab==='trash' ? 'inline-block' : 'none';
+  document.getElementById('admin-trash-btn').style.display = (adminTab==='library' && count) ? 'inline-block' : 'none';
+  document.getElementById('admin-restore-btn').style.display = (adminTab==='trash' && count) ? 'inline-block' : 'none';
+  document.getElementById('admin-delete-perm-btn').style.display = (adminTab==='trash' && count) ? 'inline-block' : 'none';
 }
+
+document.getElementById('admin-selectall-btn').addEventListener('click', ()=>{
+  if(adminItems.length && adminSelected.size === adminItems.length){
+    adminSelected.clear();
+  } else {
+    adminItems.forEach(p=>adminSelected.add(p.filename));
+  }
+  renderAdminGrid();
+  updateAdminActionBar();
+});
 
 document.getElementById('admin-tab-library').addEventListener('click', ()=>{
   adminTab = 'library';
@@ -1272,7 +1300,7 @@ document.getElementById('admin-replace-input').addEventListener('change', async 
   prog.style.display='block';
   document.getElementById('progress-text').textContent='Replacing…';
   try{
-    const displayBlob = await makeResized(file, 2000, 0.85);
+    const displayBlob = await makeResized(file, 3200, 0.9);
     const thumbBlob = await makeResized(file, 480, 0.72);
     await uploadBlob(s.access_token, filename, 'photo', displayBlob);
     await uploadBlob(s.access_token, filename, 'thumb', thumbBlob);
