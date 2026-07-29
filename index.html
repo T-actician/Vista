@@ -153,8 +153,9 @@ body.admin-mode #admin-view{display:block;min-height:100vh;padding:2rem 1.5rem}
 /* LIGHTBOX */
 #lightbox{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.96);display:none;align-items:center;justify-content:center;opacity:0;transition:opacity .4s;touch-action:none;overflow:hidden}
 #lightbox.open{display:flex;opacity:1}
-.lb-img-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none}
-#lb-img{display:block;max-width:100vw;max-height:100vh;object-fit:contain;pointer-events:none;-webkit-user-select:none;user-select:none;transform-origin:center center;will-change:transform;transition:opacity .25s}
+.lb-img-wrap{position:absolute;inset:100px 110px 130px 110px;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;border-radius:var(--radius-lg);background:rgba(255,255,255,0.02);box-shadow:0 40px 100px rgba(0,0,0,.55)}
+#lb-img{display:block;max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;-webkit-user-select:none;user-select:none;transform-origin:center center;will-change:transform;transition:opacity .25s}
+@media(max-width:768px){.lb-img-wrap{inset:70px 14px 110px 14px;border-radius:var(--radius)}}
 .lb-close{position:fixed;top:1.5rem;right:1.5rem;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:1.1rem;z-index:10;transition:opacity .3s,background .2s}
 .lb-close:hover{background:rgba(255,255,255,0.25)}
 .lb-nav{position:fixed;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:50%;width:50px;height:50px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:1.2rem;transition:opacity .3s,background .2s;z-index:10}
@@ -580,9 +581,10 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
     <div style="background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1.125rem 1.25rem;margin-bottom:.75rem">
       <div style="font-size:.6875rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:.375rem">M-Pesa</div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem">
-        <span style="font-size:1.0625rem;color:var(--text);font-weight:500;letter-spacing:.02em">0115 774 307</span>
+        <a href="tel:*334%23" style="font-size:1.0625rem;color:var(--text);font-weight:500;letter-spacing:.02em;text-decoration:none">0115 774 307</a>
         <button class="btn-ghost" style="padding:.4rem 1rem;font-size:.75rem" onclick="copySupportNumber()">Copy</button>
       </div>
+      <div style="font-size:.6875rem;color:var(--text3);margin-top:.5rem">Tap the number on your phone to open M-Pesa, or copy it to send manually.</div>
     </div>
 
     <!--
@@ -801,8 +803,7 @@ const lazyObserver = new IntersectionObserver((entries)=>{
 
 function makeCard(p){
   const card = document.createElement('div');
-  const alreadySeen = seenPhotos.has(p.id);
-  card.className = alreadySeen ? 'masonry-item' : 'masonry-item img-loading';
+  card.className = 'masonry-item img-loading';
   card.dataset.photoid = p.id;
   const isFav = favorites.has(p.id);
 
@@ -813,19 +814,34 @@ function makeCard(p){
   img.alt = p.name;
   img.decoding = 'async';
 
-  if(alreadySeen){
-    // Returning view of a photo already shown before — the browser's own
-    // HTTP cache already has these bytes, so render instantly with no
-    // skeleton and no fade, instead of replaying the load animation.
-    img.style.cssText = 'display:block;width:100%;transform:translateZ(0);opacity:1';
-    img.src = thumb;
-    img.onerror = ()=>{ img.src = p.url; };
-  } else if(imgCache.has(thumb)){
+  const alreadySeen = seenPhotos.has(p.id);
+
+  if(imgCache.has(thumb)){
     // Already decoded this session — show instantly
     img.style.cssText = 'display:block;width:100%;transform:translateZ(0);opacity:1;transition:opacity .25s ease';
     img.src = thumb;
     card.classList.remove('img-loading');
     markPhotoSeen(p.id);
+  } else if(alreadySeen){
+    // Seen in a previous visit — likely still in the browser's own HTTP
+    // cache, so load it eagerly (don't wait for it to scroll into view) with
+    // a quick fade. The shimmer skeleton stays up as a safety net until the
+    // load actually completes, so a real cache miss never shows a blank box.
+    img.style.cssText = 'display:block;width:100%;transform:translateZ(0);opacity:0;transition:opacity .15s ease';
+    const pre = new Image();
+    pre.decoding = 'async';
+    pre.onload = ()=>{
+      imgCache.set(thumb, true);
+      img.src = thumb;
+      requestAnimationFrame(()=>{ img.style.opacity = '1'; });
+      card.classList.remove('img-loading');
+    };
+    pre.onerror = ()=>{
+      img.src = p.url;
+      img.style.opacity = '1';
+      card.classList.remove('img-loading');
+    };
+    pre.src = thumb;
   } else {
     img.style.cssText = 'display:block;width:100%;transform:translateZ(0);opacity:0;transition:opacity .25s ease';
     img.dataset.src = thumb;
@@ -1006,7 +1022,8 @@ function lbScheduleHide(){
 function lbClampPan(){
   // constrain pan so image can't be dragged fully offscreen
   const img = document.getElementById('lb-img');
-  const vw = window.innerWidth, vh = window.innerHeight;
+  const wrap = document.getElementById('lb-img-wrap');
+  const vw = wrap.clientWidth, vh = wrap.clientHeight;
   const iw = img.naturalWidth || vw, ih = img.naturalHeight || vh;
   const scale = lb_state.scale;
   // rendered size
@@ -1748,7 +1765,7 @@ document.addEventListener('mouseup',()=>{
 
   function clamp(){
     // constrain so image can't be dragged fully off-screen
-    const vw = window.innerWidth, vh = window.innerHeight;
+    const vw = lbWrap.clientWidth, vh = lbWrap.clientHeight;
     const rw = (img.naturalWidth  || vw)  / (img.naturalWidth  || vw)  * vw  * ts.scale;
     const rh = (img.naturalHeight || vh) / (img.naturalHeight || vh) * vh * ts.scale;
     const maxX = Math.max(0, (rw - vw)  / 2);
