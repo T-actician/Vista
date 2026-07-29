@@ -45,7 +45,7 @@ module.exports = async (req, res) => {
   async function moveOne(fromKey, toKey) {
     await s3.send(new CopyObjectCommand({
       Bucket: bucket,
-      CopySource: `/${bucket}/${encodeURIComponent(fromKey)}`,
+      CopySource: `/${bucket}/${fromKey}`,
       Key: toKey,
     }));
     await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: fromKey }));

@@ -20,10 +20,11 @@
   --transition:all 0.4s cubic-bezier(0.23,1,0.32,1);
 }
 [data-theme="light"]{
-  --bg:#f4f2ed;--bg2:#ece9e3;--bg3:#e4e0d8;--surface:rgba(0,0,0,0.04);--surface2:rgba(0,0,0,0.07);
-  --glass:rgba(244,242,237,0.85);--glass2:rgba(244,242,237,0.96);
-  --text:#1a1a18;--text2:#5a5853;--text3:#9a9690;
-  --border:rgba(0,0,0,0.1);--border2:rgba(0,0,0,0.18);
+  --bg:#ffffff;--bg2:#eef1fc;--bg3:#e1e7fa;--surface:rgba(30,58,224,0.045);--surface2:rgba(30,58,224,0.09);
+  --glass:rgba(255,255,255,0.85);--glass2:rgba(255,255,255,0.96);
+  --text:#141a3d;--text2:#33409a;--text3:#7d87c2;
+  --accent:#1e3ae0;--accent2:#132b9e;--gold:#3355e8;
+  --border:rgba(30,58,224,0.14);--border2:rgba(30,58,224,0.24);
 }
 html{scroll-behavior:smooth}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background 0.5s,color 0.5s}
@@ -48,13 +49,13 @@ nav{position:fixed;top:0;left:0;right:0;z-index:1000;padding:1.25rem 2.5rem;disp
 .hero-slide{position:absolute;inset:0;opacity:0;transition:opacity 1.8s ease;background-size:cover;background-position:center}
 .hero-slide.active{opacity:1}
 .hero-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.2) 0%,rgba(0,0,0,.45) 60%,rgba(0,0,0,.8) 100%)}
-[data-theme="light"] .hero-overlay{background:linear-gradient(to bottom,rgba(244,242,237,.1) 0%,rgba(244,242,237,.3) 60%,rgba(244,242,237,.7) 100%)}
+[data-theme="light"] .hero-overlay{background:linear-gradient(to bottom,rgba(255,255,255,.1) 0%,rgba(255,255,255,.3) 60%,rgba(255,255,255,.7) 100%)}
 .hero-content{position:relative;z-index:2;text-align:center;padding:2rem;max-width:760px}
 .hero-label{display:inline-block;font-size:.6875rem;letter-spacing:.25em;text-transform:uppercase;color:var(--accent);margin-bottom:1.5rem;font-weight:500}
 .hero-title{font-family:'Cormorant Garamond',serif;font-size:clamp(3rem,8vw,6.5rem);font-weight:300;line-height:1.05;letter-spacing:-.01em;margin-bottom:1.5rem;color:var(--text)}
 .hero-title em{font-style:italic;color:var(--accent)}
 .hero-quote{font-size:1rem;color:rgba(240,237,232,0.7);font-style:italic;font-family:'Cormorant Garamond',serif;font-size:1.25rem;line-height:1.6;margin-bottom:2.5rem;max-width:520px;margin-left:auto;margin-right:auto}
-[data-theme="light"] .hero-quote{color:rgba(26,26,24,0.65)}
+[data-theme="light"] .hero-quote{color:rgba(20,26,61,0.65)}
 .hero-cta{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
 .btn-primary{background:var(--accent);color:#fff;border:none;padding:.75rem 2rem;border-radius:var(--radius-sm);font-size:.875rem;letter-spacing:.08em;cursor:pointer;font-family:'Inter',sans-serif;font-weight:500;transition:var(--transition)}
 .btn-primary:hover{background:var(--accent2);transform:translateY(-1px)}
@@ -1274,8 +1275,9 @@ async function runManageAction(action){
     body: JSON.stringify({ action, filenames })
   });
   const data = await res.json();
-  const failed = (data.results||[]).filter(r=>!r.ok).length;
-  showToast(failed ? `Done — ${failed} failed` : 'Done');
+  const failedItems = (data.results||[]).filter(r=>!r.ok);
+  if(failedItems.length) console.error('manage-photo failures:', failedItems);
+  showToast(failedItems.length ? `Done — ${failedItems.length} failed` : 'Done');
   loadAdminGrid();
 }
 
