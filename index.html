@@ -121,14 +121,14 @@ section{padding:5rem 2.5rem}
 .masonry-item{break-inside:avoid;margin-bottom:1rem;position:relative;border-radius:var(--radius);overflow:hidden;cursor:pointer;transform:translateZ(0);-webkit-transform:translateZ(0);contain:layout style paint}
 .masonry-item img{width:100%;height:auto;display:block;transform:translateZ(0);-webkit-transform:translateZ(0);will-change:auto;transition:transform .6s cubic-bezier(0.23,1,0.32,1)}
 .masonry-item:hover img{transform:translateZ(0) scale(1.04)}
-.card-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.75) 0%,transparent 50%);opacity:0;transition:opacity .4s;display:flex;flex-direction:column;justify-content:flex-end;padding:1.125rem}
+.card-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.75) 0%,transparent 50%);opacity:0;transition:opacity .4s;display:flex;flex-direction:column;justify-content:flex-end;padding:1.125rem;z-index:3}
 .masonry-item:hover .card-overlay{opacity:1}
 .card-name{font-family:'Cormorant Garamond',serif;font-size:1.0625rem;font-weight:400;color:#fff;margin-bottom:.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card-actions{display:flex;gap:.5rem;flex-wrap:wrap}
 .ca{background:rgba(255,255,255,0.15);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:100px;padding:.3rem .75rem;font-size:.6875rem;letter-spacing:.06em;cursor:pointer;transition:.2s;font-family:'Inter',sans-serif}
 .ca:hover{background:rgba(255,255,255,0.3)}
 .ca.fav-btn.loved{background:rgba(220,60,60,0.5);border-color:rgba(220,60,60,0.6)}
-.img-cat-badge{position:absolute;top:.75rem;left:.75rem;background:rgba(0,0,0,0.45);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:100px;padding:.2rem .625rem;font-size:.625rem;letter-spacing:.1em;text-transform:uppercase}
+.img-cat-badge{position:absolute;top:.75rem;left:.75rem;background:rgba(0,0,0,0.45);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:100px;padding:.2rem .625rem;font-size:.625rem;letter-spacing:.1em;text-transform:uppercase;z-index:3}
 
 .grid-view .masonry-grid{columns:unset;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem}
 .grid-view .masonry-item{break-inside:unset;margin-bottom:0;aspect-ratio:1}
@@ -1760,7 +1760,7 @@ document.addEventListener('mouseup',()=>{
   };
 })();
 
-// Init
+// Init...
 checkAdminRoute();
 initHero();
 buildCats();
