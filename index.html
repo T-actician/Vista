@@ -549,6 +549,17 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
 <!-- TOAST -->
 <div id="toast"></div>
 
+<!-- CONFIRM MODAL (replaces native browser confirm()) -->
+<div id="confirm-modal" style="display:none;position:fixed;inset:0;z-index:6000;background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:1.5rem">
+  <div style="background:var(--glass2);border:1px solid var(--border2);border-radius:var(--radius);max-width:380px;width:100%;padding:1.75rem;text-align:center;backdrop-filter:blur(20px)">
+    <div id="confirm-modal-text" style="font-size:.9375rem;color:var(--text);line-height:1.5;margin-bottom:1.5rem"></div>
+    <div style="display:flex;gap:.75rem;justify-content:center">
+      <button id="confirm-modal-cancel" class="btn-ghost" style="padding:.5rem 1.5rem">Cancel</button>
+      <button id="confirm-modal-ok" class="btn-primary" style="padding:.5rem 1.5rem">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const CATEGORIES = ['All','Mountains','Oceans','Forests','Wildlife','Sunsets','Waterfalls','Flowers','Rivers','Landscapes'];
 const QUOTES = [
@@ -1057,6 +1068,27 @@ document.getElementById('admin-viewsite-link').addEventListener('click', (e)=>{
   checkAdminRoute();
 });
 
+// In-site confirm modal — replaces native browser confirm()
+function siteConfirm(message){
+  return new Promise(resolve=>{
+    const modal = document.getElementById('confirm-modal');
+    document.getElementById('confirm-modal-text').textContent = message;
+    modal.style.display = 'flex';
+    const okBtn = document.getElementById('confirm-modal-ok');
+    const cancelBtn = document.getElementById('confirm-modal-cancel');
+    function cleanup(result){
+      modal.style.display = 'none';
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      resolve(result);
+    }
+    function onOk(){ cleanup(true); }
+    function onCancel(){ cleanup(false); }
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+  });
+}
+
 async function refreshAdminUI(){
   const { data:{ session: s } } = await sb.auth.getSession();
   const isAdmin = !!(s && s.user && s.user.id === ADMIN_UID);
@@ -1312,8 +1344,9 @@ async function runManageAction(action, btn){
 
 document.getElementById('admin-trash-btn').addEventListener('click', (e)=>runManageAction('trash', e.currentTarget));
 document.getElementById('admin-restore-btn').addEventListener('click', (e)=>runManageAction('restore', e.currentTarget));
-document.getElementById('admin-delete-perm-btn').addEventListener('click', (e)=>{
-  if(confirm(`Permanently delete ${adminSelected.size} photo(s)? This cannot be undone.`)) runManageAction('delete-permanent', e.currentTarget);
+document.getElementById('admin-delete-perm-btn').addEventListener('click', async (e)=>{
+  const ok = await siteConfirm(`Permanently delete ${adminSelected.size} photo(s)? This cannot be undone.`);
+  if(ok) runManageAction('delete-permanent', e.currentTarget);
 });
 
 document.getElementById('admin-replace-btn').addEventListener('click', ()=>{

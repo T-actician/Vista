@@ -44,10 +44,16 @@ module.exports = async (req, res) => {
     return items;
   }
 
+  // Fix the signing time to the current 10-minute window so the same photo
+  // gets the same signed URL across repeat requests - lets browsers cache
+  // the actual image bytes across reloads, while the list above stays live.
+  const bucketMs = 10 * 60 * 1000;
+  const signingDate = new Date(Math.floor(Date.now() / bucketMs) * bucketMs);
+
   function signedGet(key) {
     return getSignedUrl(s3, new GetObjectCommand({
       Bucket: bucket, Key: key, ResponseCacheControl: 'public, max-age=21600',
-    }), { expiresIn: 21600 }); // 6 hours
+    }), { expiresIn: 21600, signingDate }); // 6 hours
   }
 
   try {
