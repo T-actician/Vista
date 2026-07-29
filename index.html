@@ -496,6 +496,9 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
     <button id="admin-login-btn" class="btn-primary" style="width:100%">Sign In</button>
     <div id="admin-login-error" style="color:#e07a7a;font-size:.8125rem;margin-top:.75rem;min-height:1.2em"></div>
     <a href="#" id="admin-forgot-link" style="display:inline-block;margin-top:.5rem;color:var(--text3);font-size:.8125rem;text-decoration:underline">Forgot password?</a>
+    <div style="margin-top:1.25rem">
+      <a href="#" id="admin-login-viewsite-link" style="color:var(--text2);font-size:.8125rem;text-decoration:none">← Back to Site</a>
+    </div>
   </div>
   <div id="admin-reset" style="display:none;max-width:360px;margin:15vh auto;padding:2rem;text-align:center">
     <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.5rem;margin-bottom:1.5rem">Set New Password</h2>
@@ -1063,6 +1066,12 @@ async function refreshAdminQuicklink(){
 }
 
 document.getElementById('admin-viewsite-link').addEventListener('click', (e)=>{
+  e.preventDefault();
+  location.hash = '';
+  checkAdminRoute();
+});
+
+document.getElementById('admin-login-viewsite-link').addEventListener('click', (e)=>{
   e.preventDefault();
   location.hash = '';
   checkAdminRoute();
