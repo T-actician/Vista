@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
+<script>try{ const t=localStorage.getItem('theme'); if(t) document.documentElement.dataset.theme=t; }catch(e){}</script>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1735,10 +1736,13 @@ document.addEventListener('keydown',e=>{
 });
 
 // Theme
+document.getElementById('theme-toggle').textContent = document.documentElement.dataset.theme==='light' ? '🌙' : '☀️';
 document.getElementById('theme-toggle').addEventListener('click',()=>{
   const light = document.documentElement.dataset.theme==='light';
-  document.documentElement.dataset.theme = light?'dark':'light';
+  const next = light?'dark':'light';
+  document.documentElement.dataset.theme = next;
   document.getElementById('theme-toggle').textContent = light?'☀️':'🌙';
+  try{ localStorage.setItem('theme', next); } catch(e){}
   showToast(light?'Dark mode on':'Light mode on');
 });
 
