@@ -135,7 +135,7 @@ section{padding:5rem 2.5rem}
 
 /* ADMIN ROUTE (#/admin) */
 #admin-view{display:none}
-body.admin-mode>*:not(#admin-view):not(#toast):not(#confirm-modal){display:none!important}
+body.admin-mode>*:not(#admin-view):not(#toast):not(#confirm-modal):not(#support-modal){display:none!important}
 body.admin-mode #admin-view{display:block;min-height:100vh;padding:2rem 1.5rem}
 .admin-tab{background:none;border:none;color:var(--text3);font-family:inherit;font-size:.875rem;padding:.75rem 1rem;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
 .admin-tab.active{color:var(--text);border-bottom-color:var(--accent)}
@@ -307,6 +307,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
     <a href="#/admin" id="admin-quicklink" style="display:none;font-size:.8125rem;color:var(--accent);border:1px solid var(--accent);border-radius:20px;padding:.375rem .875rem;text-decoration:none;white-space:nowrap">Admin</a>
     <button class="btn-icon" id="search-toggle" title="Search" aria-label="Search">🔍</button>
     <button class="btn-icon" id="fav-toggle" title="Favorites" aria-label="Favorites">🤍</button>
+    <button class="btn-icon" id="support-toggle" title="Support VISTA" aria-label="Support VISTA">☕</button>
     <button class="btn-icon" id="theme-toggle" title="Toggle theme" aria-label="Toggle theme">☀️</button>
     <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
   </div>
@@ -439,6 +440,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
       <h4>Platform</h4>
       <a href="#story">Our Story</a>
       <a href="#" onclick="toggleFavPanel()">Favourites</a>
+      <a href="#" onclick="openSupportModal();return false;">Support VISTA</a>
     </div>
   </div>
   <div class="footer-bottom">
@@ -565,6 +567,45 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
       <button id="confirm-modal-cancel" class="btn-ghost" style="padding:.5rem 1.5rem">Cancel</button>
       <button id="confirm-modal-ok" class="btn-primary" style="padding:.5rem 1.5rem">Confirm</button>
     </div>
+  </div>
+</div>
+
+<!-- SUPPORT MODAL -->
+<div id="support-modal" style="display:none;position:fixed;inset:0;z-index:6000;background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:1.5rem">
+  <div style="background:var(--glass2);border:1px solid var(--border2);border-radius:var(--radius);max-width:400px;width:100%;padding:2rem;backdrop-filter:blur(20px);position:relative">
+    <button onclick="closeSupportModal()" aria-label="Close" style="position:absolute;top:1rem;right:1rem;background:none;border:none;color:var(--text2);font-size:1.1rem;cursor:pointer">✕</button>
+    <div style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--text);margin-bottom:.5rem">Support VISTA</div>
+    <p style="font-size:.875rem;color:var(--text2);line-height:1.6;margin-bottom:1.5rem">If this collection has brought you something good, you're welcome to leave a little support — entirely optional.</p>
+
+    <div style="background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1.125rem 1.25rem;margin-bottom:.75rem">
+      <div style="font-size:.6875rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:.375rem">M-Pesa</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem">
+        <span style="font-size:1.0625rem;color:var(--text);font-weight:500;letter-spacing:.02em">0115 774 307</span>
+        <button class="btn-ghost" style="padding:.4rem 1rem;font-size:.75rem" onclick="copySupportNumber()">Copy</button>
+      </div>
+    </div>
+
+    <!--
+    Re-enable when ready — keeps the same card layout as the M-Pesa block above.
+
+    <div style="background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1.125rem 1.25rem;margin-bottom:.75rem">
+      <div style="font-size:.6875rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:.375rem">PayPal</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem">
+        <span style="font-size:.9375rem;color:var(--text)">paypal.me/yourhandle</span>
+        <a class="btn-ghost" style="padding:.4rem 1rem;font-size:.75rem;text-decoration:none" href="https://paypal.me/yourhandle" target="_blank" rel="noopener">Open</a>
+      </div>
+    </div>
+
+    <div style="background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1.125rem 1.25rem;margin-bottom:.75rem">
+      <div style="font-size:.6875rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:.375rem">InstaSend</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem">
+        <span style="font-size:.9375rem;color:var(--text)">@yourhandle</span>
+        <a class="btn-ghost" style="padding:.4rem 1rem;font-size:.75rem;text-decoration:none" href="https://instasend.co/yourhandle" target="_blank" rel="noopener">Open</a>
+      </div>
+    </div>
+    -->
+
+    <p style="font-size:.75rem;color:var(--text3);margin-top:1.25rem;text-align:center">Thank you for being here — with or without it. 🌿</p>
   </div>
 </div>
 
@@ -703,6 +744,19 @@ const imgCache = new Map();
 // thumb->original fallback map
 const p_url_map = new Map();
 
+// Photos the visitor has already seen in a previous visit/reload — persisted
+// so a returning view can skip the skeleton + fade-in and just show the
+// (browser-cached) image immediately, instead of "loading" it all over again.
+const SEEN_KEY = 'vista_seen_photos';
+let seenPhotos;
+try { seenPhotos = new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); }
+catch(e) { seenPhotos = new Set(); }
+function markPhotoSeen(id){
+  if(seenPhotos.has(id)) return;
+  seenPhotos.add(id);
+  try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seenPhotos])); } catch(e){}
+}
+
 // Small pre-generated thumbnail (uploaded alongside the original at upload time)
 function thumbUrl(p){
   return p.thumbUrl || p.url;
@@ -720,6 +774,7 @@ const lazyObserver = new IntersectionObserver((entries)=>{
       img.src = src;
       img.style.opacity = '1';
       img.closest('.masonry-item') && img.closest('.masonry-item').classList.remove('img-loading');
+      if(img.dataset.pid) markPhotoSeen(img.dataset.pid);
     } else {
       const pre = new Image();
       pre.decoding = 'async';
@@ -729,6 +784,7 @@ const lazyObserver = new IntersectionObserver((entries)=>{
         // fade in
         requestAnimationFrame(()=>{ img.style.opacity='1'; });
         img.closest('.masonry-item') && img.closest('.masonry-item').classList.remove('img-loading');
+        if(img.dataset.pid) markPhotoSeen(img.dataset.pid);
       };
       pre.onerror = ()=>{
         // fallback to full-res
@@ -736,6 +792,7 @@ const lazyObserver = new IntersectionObserver((entries)=>{
         img.src = fallback;
         img.style.opacity='1';
         img.closest('.masonry-item') && img.closest('.masonry-item').classList.remove('img-loading');
+        if(img.dataset.pid) markPhotoSeen(img.dataset.pid);
       };
       pre.src = src;
     }
@@ -744,7 +801,8 @@ const lazyObserver = new IntersectionObserver((entries)=>{
 
 function makeCard(p){
   const card = document.createElement('div');
-  card.className = 'masonry-item img-loading';
+  const alreadySeen = seenPhotos.has(p.id);
+  card.className = alreadySeen ? 'masonry-item' : 'masonry-item img-loading';
   card.dataset.photoid = p.id;
   const isFav = favorites.has(p.id);
 
@@ -754,15 +812,24 @@ function makeCard(p){
   const img = document.createElement('img');
   img.alt = p.name;
   img.decoding = 'async';
-  img.style.cssText = 'display:block;width:100%;transform:translateZ(0);opacity:0;transition:opacity .25s ease';
 
-  if(imgCache.has(thumb)){
-    // Already decoded — show instantly
+  if(alreadySeen){
+    // Returning view of a photo already shown before — the browser's own
+    // HTTP cache already has these bytes, so render instantly with no
+    // skeleton and no fade, instead of replaying the load animation.
+    img.style.cssText = 'display:block;width:100%;transform:translateZ(0);opacity:1';
     img.src = thumb;
-    img.style.opacity = '1';
+    img.onerror = ()=>{ img.src = p.url; };
+  } else if(imgCache.has(thumb)){
+    // Already decoded this session — show instantly
+    img.style.cssText = 'display:block;width:100%;transform:translateZ(0);opacity:1;transition:opacity .25s ease';
+    img.src = thumb;
     card.classList.remove('img-loading');
+    markPhotoSeen(p.id);
   } else {
+    img.style.cssText = 'display:block;width:100%;transform:translateZ(0);opacity:0;transition:opacity .25s ease';
     img.dataset.src = thumb;
+    img.dataset.pid = p.id;
     lazyObserver.observe(img);
   }
 
@@ -981,6 +1048,26 @@ function renderFavPanel(){
 function toggleFavPanel(){
   document.getElementById('fav-panel').classList.toggle('open');
 }
+
+function openSupportModal(){
+  const m = document.getElementById('support-modal');
+  m.style.display = 'flex';
+}
+function closeSupportModal(){
+  document.getElementById('support-modal').style.display = 'none';
+}
+function copySupportNumber(){
+  const number = '0115774307';
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(number).then(()=>showToast('M-Pesa number copied — thank you! 🌿'));
+  } else {
+    showToast(number);
+  }
+}
+document.getElementById('support-toggle').addEventListener('click', openSupportModal);
+document.getElementById('support-modal').addEventListener('click', e=>{
+  if(e.target.id === 'support-modal') closeSupportModal();
+});
 
 async function downloadPhoto(idx, e){
   if(e) e.stopPropagation();

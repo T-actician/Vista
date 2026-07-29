@@ -46,10 +46,11 @@ module.exports = async (req, res) => {
     return items;
   }
 
-  // Fix the signing time to the current 10-minute window so the same photo
-  // gets the same signed URL across repeat requests - lets browsers cache
-  // the actual image bytes across reloads, while the list above stays live.
-  const bucketMs = 10 * 60 * 1000;
+  // Fix the signing time to the current 6-hour window (matching the cache
+  // lifetime below) so a reload within that window produces the exact same
+  // signed URL and the browser serves images from its own cache instead of
+  // re-downloading them.
+  const bucketMs = 6 * 60 * 60 * 1000;
   const signingDate = new Date(Math.floor(Date.now() / bucketMs) * bucketMs);
 
   function signedGet(key, downloadName) {
@@ -58,7 +59,7 @@ module.exports = async (req, res) => {
       Key: key,
       ResponseCacheControl: 'public, max-age=21600',
       ...(downloadName ? { ResponseContentDisposition: `attachment; filename="${downloadName}"` } : {}),
-    }), { expiresIn: 21600, signingDate }); // 6 hours
+    }), { expiresIn: 25200, signingDate }); // valid 7h from the start of the bucket (6h bucket + 1h buffer)
   }
 
   try {
