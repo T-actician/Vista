@@ -1,5 +1,4 @@
 const { S3Client, ListObjectsV2Command, GetObjectCommand } = require('@aws-sdk/client-s3');
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { createClient } = require('@supabase/supabase-js');
 
 const CAT_LIST = ['Mountains','Oceans','Forests','Wildlife','Sunsets','Waterfalls','Flowers','Rivers','Landscapes'];
@@ -56,20 +55,11 @@ module.exports = async (req, res) => {
     } catch (e) { return {}; }
   }
 
-  // Fix the signing time to the current 6-hour window (matching the cache
-  // lifetime below) so a reload within that window produces the exact same
-  // signed URL and the browser serves images from its own cache instead of
-  // re-downloading them.
-  const bucketMs = 6 * 60 * 60 * 1000;
-  const signingDate = new Date(Math.floor(Date.now() / bucketMs) * bucketMs);
+  const MEDIA_BASE = process.env.MEDIA_WORKER_URL; // e.g. https://vista-media.<subdomain>.workers.dev
 
-  function signedGet(key, downloadName) {
-    return getSignedUrl(s3, new GetObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      ResponseCacheControl: 'public, max-age=21600',
-      ...(downloadName ? { ResponseContentDisposition: `attachment; filename="${downloadName}"` } : {}),
-    }), { expiresIn: 25200, signingDate }); // valid 7h from the start of the bucket (6h bucket + 1h buffer)
+  function mediaUrl(key, downloadName) {
+    const u = `${MEDIA_BASE}/${key}`;
+    return downloadName ? `${u}?dl=${encodeURIComponent(downloadName)}` : u;
   }
 
   try {
@@ -99,11 +89,9 @@ module.exports = async (req, res) => {
       const name = rest.replace(/^\d+_/, '').replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
       const ext = (filename.match(/\.[^.]+$/) || ['.jpg'])[0];
       const downloadName = `${name.replace(/[^a-z0-9 ]/gi, '').trim() || 'vista-photo'}${ext}`;
-      const [url, thumbUrl, downloadUrl] = await Promise.all([
-        signedGet(o.Key),
-        hasThumb ? signedGet(`${thumbPrefix}${filename}`) : signedGet(o.Key),
-        signedGet(o.Key, downloadName),
-      ]);
+      const url = mediaUrl(o.Key);
+      const thumbUrl = hasThumb ? mediaUrl(`${thumbPrefix}${filename}`) : url;
+      const downloadUrl = mediaUrl(o.Key, downloadName);
       return {
         id: o.Key,
         filename,
@@ -119,6 +107,11 @@ module.exports = async (req, res) => {
 
     photos.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
 
+    if (!wantsTrash) {
+      res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=300');
+    } else {
+      res.setHeader('Cache-Control', 'no-store');
+    }
     res.status(200).json({ photos });
   } catch (e) {
     res.status(500).json({ error: 'Could not list photos', detail: String(e) });
