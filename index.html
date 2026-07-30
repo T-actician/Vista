@@ -539,6 +539,9 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
     <div id="upload-progress">
       <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
       <div class="progress-text" id="progress-text">Uploading…</div>
+      <div style="text-align:center;margin-top:.625rem">
+        <button id="upload-cancel-btn" class="btn-ghost" style="display:none;padding:.4rem 1.25rem;font-size:.8125rem">Cancel</button>
+      </div>
     </div>
 
     <div style="display:flex;align-items:center;gap:.5rem;margin:3rem 0 1.25rem;border-bottom:1px solid var(--border2)">
@@ -1465,10 +1468,12 @@ async function uploadBlob(token, filename, kind, blob){
 }
 
 // Runs `tasks` through `worker` with at most `limit` running concurrently.
-async function runPool(tasks, limit, worker){
+// Stops handing out new tasks (does not abort in-flight ones) once isCancelled() is true.
+async function runPool(tasks, limit, worker, isCancelled){
   let idx = 0;
   const runners = new Array(Math.min(limit, tasks.length)).fill(0).map(async ()=>{
     while(idx < tasks.length){
+      if(isCancelled && isCancelled()) return;
       const i = idx++;
       await worker(tasks[i], i);
     }
@@ -1476,12 +1481,26 @@ async function runPool(tasks, limit, worker){
   await Promise.all(runners);
 }
 
+let currentUploadCancel = null;
+
+document.getElementById('upload-cancel-btn').addEventListener('click', ()=>{
+  if(currentUploadCancel) currentUploadCancel.cancelled = true;
+  document.getElementById('upload-cancel-btn').disabled = true;
+  document.getElementById('progress-text').textContent = 'Cancelling — finishing current uploads…';
+});
+
 async function handleAdminFiles(files){
   const arr = Array.from(files).filter(f=>f.type.startsWith('image/'));
   if(!arr.length){ showToast('No images found'); return; }
   const { data:{ session: s } } = await sb.auth.getSession();
   if(!s){ showToast('Session expired — sign in again'); return; }
   const token = s.access_token;
+
+  const cancelState = { cancelled: false };
+  currentUploadCancel = cancelState;
+  const cancelBtn = document.getElementById('upload-cancel-btn');
+  cancelBtn.disabled = false;
+  cancelBtn.style.display = 'inline-block';
 
   const prog = document.getElementById('upload-progress');
   prog.style.display='block';
@@ -1494,11 +1513,13 @@ async function handleAdminFiles(files){
   } catch(e){ /* if this fails, uploads still proceed without dedup */ }
 
   const newHashes = {};
+  const uploadedNames = new Set();
 
   // Phase 1: sequential — hashing/dedup must see every prior result in order,
   // so this stays one-at-a-time. It's CPU-only (no network), so it's fast.
   const toUpload = [];
   for(let i=0;i<arr.length;i++){
+    if(cancelState.cancelled) break;
     const file = arr[i];
     document.getElementById('progress-text').textContent=`Analyzing ${i+1} of ${arr.length}…`;
     try{
@@ -1527,6 +1548,8 @@ async function handleAdminFiles(files){
   }
 
   // Phase 2: concurrent — the actual network uploads, up to 5 at a time.
+  // Anything already uploaded when Cancel is hit stays uploaded; queued items
+  // that haven't started yet are simply never sent.
   let uploaded = 0;
   await runPool(toUpload, 5, async (item)=>{
     try{
@@ -1534,6 +1557,7 @@ async function handleAdminFiles(files){
         uploadBlob(token, item.baseName, 'photo', item.displayBlob),
         uploadBlob(token, item.baseName, 'thumb', item.thumbBlob),
       ]);
+      uploadedNames.add(item.baseName);
     } catch(e){
       failed++;
       delete newHashes[item.baseName];
@@ -1543,20 +1567,25 @@ async function handleAdminFiles(files){
     const pct = 50 + Math.round((uploaded/Math.max(toUpload.length,1))*50);
     document.getElementById('progress-fill').style.width=pct+'%';
     document.getElementById('progress-text').textContent=`Uploaded ${uploaded} of ${toUpload.length}…`;
-  });
+  }, ()=>cancelState.cancelled);
 
-  if(Object.keys(newHashes).length){
+  const hashesToSend = {};
+  for(const name of uploadedNames) hashesToSend[name] = newHashes[name];
+  if(Object.keys(hashesToSend).length){
     try{
       await fetch('/api/hashes', {
         method:'POST',
         headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
-        body: JSON.stringify({ set: newHashes })
+        body: JSON.stringify({ set: hashesToSend })
       });
     } catch(e){ /* hashes just won't be recorded for this batch */ }
   }
 
+  cancelBtn.style.display = 'none';
+  currentUploadCancel = null;
   setTimeout(()=>{prog.style.display='none';},1000);
-  showToast(`${toUpload.length-failed} uploaded${duplicates?`, ${duplicates} duplicate skipped`:''}${failed?`, ${failed} failed`:''}`);
+  const skippedByCancel = toUpload.length - uploadedNames.size - failed;
+  showToast(`${uploadedNames.size} uploaded${duplicates?`, ${duplicates} duplicate skipped`:''}${failed?`, ${failed} failed`:''}${cancelState.cancelled && skippedByCancel>0?`, ${skippedByCancel} cancelled`:''}`);
   loadAdminGrid();
 }
 
