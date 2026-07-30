@@ -171,8 +171,11 @@ body.admin-mode #admin-view{display:block;min-height:100vh;padding:2rem 1.5rem}
 .panel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem}
 .panel-title{font-family:'Cormorant Garamond',serif;font-size:1.5rem;font-weight:300}
 .fav-grid{display:grid;grid-template-columns:1fr 1fr;gap:.625rem}
-.fav-thumb{aspect-ratio:1;object-fit:cover;border-radius:var(--radius-sm);cursor:pointer;transition:.3s;width:100%}
+.fav-thumb{aspect-ratio:1;object-fit:cover;border-radius:var(--radius-sm);cursor:pointer;transition:.3s;width:100%;display:block}
 .fav-thumb:hover{opacity:.8}
+.fav-item{position:relative}
+.fav-remove{position:absolute;top:.35rem;right:.35rem;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.75rem;line-height:1;transition:background .2s}
+.fav-remove:hover{background:rgba(200,60,60,.9)}
 .fav-empty{text-align:center;padding:3rem 1rem;color:var(--text3);font-size:.875rem}
 
 /* FEATURED */
@@ -1009,12 +1012,33 @@ function renderFavPanel(){
     grid.innerHTML = '<div class="fav-empty" style="grid-column:1/3">Heart photos to save them here 🤍</div>';
     return;
   }
-  grid.innerHTML = favPhotos.map(p=>`<img class="fav-thumb" src="${p.url}" alt="${p.name}" title="${p.name}" onclick="openLightbox(${photos.indexOf(p)})">`).join('');
+  grid.innerHTML = favPhotos.map(p=>`
+    <div class="fav-item">
+      <img class="fav-thumb" src="${p.url}" alt="${p.name}" title="${p.name}" onclick="openLightbox(${photos.indexOf(p)})">
+      <button class="fav-remove" onclick="removeFavorite('${p.id}', event)" aria-label="Remove from favourites" title="Remove from favourites">✕</button>
+    </div>`).join('');
+}
+
+function removeFavorite(id, e){
+  if(e) e.stopPropagation();
+  favorites.delete(id);
+  showToast('Removed from favourites');
+  updateStats();
+  renderFavPanel();
+  // Keep the heart button on the main gallery card in sync, if it's rendered
+  const heartBtn = document.querySelector(`.fav-btn[data-id="${id}"]`);
+  if(heartBtn){ heartBtn.textContent='🤍 Save'; heartBtn.classList.remove('loved'); }
 }
 
 async function downloadAllFavorites(){
   const favPhotos = photos.filter(p=>favorites.has(p.id));
   if(!favPhotos.length) return;
+
+  if(favPhotos.length === 1){
+    downloadPhoto(photos.indexOf(favPhotos[0]));
+    return;
+  }
+
   const btn = document.getElementById('fav-download-all');
   const originalLabel = btn.textContent;
   btn.disabled = true;
