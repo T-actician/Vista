@@ -1423,7 +1423,7 @@ async function classifyByContent(imgEl){
 // Perceptual hash (dHash, 64-bit): same fingerprint survives resize/recompression,
 // so it catches true duplicate photos, not just identical files.
 async function computeDHash(imgEl){
-  const w=9, h=8;
+  const w=17, h=16;
   const canvas = document.createElement('canvas');
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d');
@@ -1447,8 +1447,10 @@ function hammingDistanceHex(a,b){
   return dist;
 }
 
-// distance 0 = identical, <=6 = treat as duplicate (survives resize/JPEG re-encode)
-const DUPLICATE_THRESHOLD = 6;
+// 256-bit hash now (was 64-bit) — much finer-grained, so similar-but-different
+// nature photos (same sky/ground composition) no longer collide as easily.
+// Threshold scaled down proportionally, still catches resize/recompress copies.
+const DUPLICATE_THRESHOLD = 20;
 
 function findDuplicateHash(hash, existingHashes){
   for(const filename in existingHashes){
