@@ -12,7 +12,10 @@ export default {
     const cache = caches.default;
     const cacheKey = new Request(url.toString(), request);
     const cached = await cache.match(cacheKey);
-    if (cached) return cached;
+    // Only trust a cached entry if it already has the CORS header — older
+    // cached responses (from before this header existed) are immutable for
+    // a year and won't self-update on their own, so we bypass and refetch.
+    if (cached && cached.headers.get('Access-Control-Allow-Origin')) return cached;
 
     const aws = new AwsClient({
       accessKeyId: env.B2_KEY_ID,
