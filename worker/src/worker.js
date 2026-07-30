@@ -32,6 +32,7 @@ export default {
     // Filenames are timestamped/unique per upload, so content at a given key
     // never changes — safe to cache indefinitely, both at the edge and in browsers.
     headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    headers.set('Access-Control-Allow-Origin', '*');
     if (dl) headers.set('Content-Disposition', `attachment; filename="${dl}"`);
 
     const response = new Response(b2res.body, { status: 200, headers });
