@@ -777,36 +777,19 @@ function makeCard(p){
   img.alt = p.name;
   img.decoding = 'async';
 
-  const alreadySeen = seenPhotos.has(p.id);
-
   if(imgCache.has(thumb)){
     // Already decoded this session — show instantly
     img.style.cssText = 'display:block;width:100%;transform:translateZ(0);opacity:1;transition:opacity .25s ease';
     img.src = thumb;
     card.classList.remove('img-loading');
     markPhotoSeen(p.id);
-  } else if(alreadySeen){
-    // Seen in a previous visit — likely still in the browser's own HTTP
-    // cache, so load it eagerly (don't wait for it to scroll into view) with
-    // a quick fade. The shimmer skeleton stays up as a safety net until the
-    // load actually completes, so a real cache miss never shows a blank box.
-    img.style.cssText = 'display:block;width:100%;transform:translateZ(0);opacity:0;transition:opacity .15s ease';
-    const pre = new Image();
-    pre.decoding = 'async';
-    pre.onload = ()=>{
-      imgCache.set(thumb, true);
-      img.src = thumb;
-      requestAnimationFrame(()=>{ img.style.opacity = '1'; });
-      card.classList.remove('img-loading');
-    };
-    pre.onerror = ()=>{
-      img.src = p.url;
-      img.style.opacity = '1';
-      card.classList.remove('img-loading');
-    };
-    pre.src = thumb;
   } else {
-    img.style.cssText = 'display:block;width:100%;transform:translateZ(0);opacity:0;transition:opacity .25s ease';
+    // Not decoded this session (whether or not it was seen on a prior visit)
+    // — defer the actual fetch until it's about to scroll into view. A photo
+    // being "seen" before only shortens the fade transition once it loads;
+    // it never causes an eager fetch on page load.
+    const seenBefore = seenPhotos.has(p.id);
+    img.style.cssText = `display:block;width:100%;transform:translateZ(0);opacity:0;transition:opacity ${seenBefore?'.15s':'.25s'} ease`;
     img.dataset.src = thumb;
     img.dataset.pid = p.id;
     lazyObserver.observe(img);
