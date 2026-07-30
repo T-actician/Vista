@@ -108,7 +108,7 @@ module.exports = async (req, res) => {
     photos.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
 
     if (!wantsTrash) {
-      res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=300');
+      res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=120, stale-while-revalidate=86400');
     } else {
       res.setHeader('Cache-Control', 'no-store');
     }
