@@ -489,7 +489,10 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:3.5rem 2
 <div id="fav-panel">
   <div class="panel-header">
     <div class="panel-title">Favourites</div>
-    <button class="btn-icon" onclick="toggleFavPanel()" aria-label="Close">✕</button>
+    <div style="display:flex;gap:.5rem">
+      <button class="btn-icon" id="fav-download-all" onclick="downloadAllFavorites()" aria-label="Download all favourites" title="Download all favourites" style="display:none">⬇</button>
+      <button class="btn-icon" onclick="toggleFavPanel()" aria-label="Close">✕</button>
+    </div>
   </div>
   <div class="fav-grid" id="fav-grid">
     <div class="fav-empty" style="grid-column:1/3">Heart photos to save them here 🤍</div>
@@ -1001,11 +1004,31 @@ function toggleFav(id, btn, e){
 function renderFavPanel(){
   const grid = document.getElementById('fav-grid');
   const favPhotos = photos.filter(p=>favorites.has(p.id));
+  const dlAllBtn = document.getElementById('fav-download-all');
+  dlAllBtn.style.display = favPhotos.length ? 'inline-flex' : 'none';
   if(!favPhotos.length){
     grid.innerHTML = '<div class="fav-empty" style="grid-column:1/3">Heart photos to save them here 🤍</div>';
     return;
   }
   grid.innerHTML = favPhotos.map(p=>`<img class="fav-thumb" src="${p.url}" alt="${p.name}" title="${p.name}" onclick="openLightbox(${photos.indexOf(p)})">`).join('');
+}
+
+async function downloadAllFavorites(){
+  const favPhotos = photos.filter(p=>favorites.has(p.id));
+  if(!favPhotos.length) return;
+  showToast(`Downloading ${favPhotos.length} photo${favPhotos.length!==1?'s':''}…`);
+  for(const p of favPhotos){
+    const a = document.createElement('a');
+    a.href = p.downloadUrl || p.url;
+    a.download = p.filename || p.name + '.jpg';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Small gap between triggers — browsers block/queue rapid-fire downloads
+    // fired in the same tick, so this keeps every file actually starting.
+    await new Promise(r=>setTimeout(r, 400));
+  }
 }
 
 function toggleFavPanel(){
