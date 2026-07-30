@@ -1464,6 +1464,18 @@ async function uploadBlob(token, filename, kind, blob){
   if(!data.ok) throw new Error(data.error || 'upload failed');
 }
 
+// Runs `tasks` through `worker` with at most `limit` running concurrently.
+async function runPool(tasks, limit, worker){
+  let idx = 0;
+  const runners = new Array(Math.min(limit, tasks.length)).fill(0).map(async ()=>{
+    while(idx < tasks.length){
+      const i = idx++;
+      await worker(tasks[i], i);
+    }
+  });
+  await Promise.all(runners);
+}
+
 async function handleAdminFiles(files){
   const arr = Array.from(files).filter(f=>f.type.startsWith('image/'));
   if(!arr.length){ showToast('No images found'); return; }
@@ -1473,7 +1485,7 @@ async function handleAdminFiles(files){
 
   const prog = document.getElementById('upload-progress');
   prog.style.display='block';
-  let done=0, failed=0, duplicates=0;
+  let failed=0, duplicates=0;
 
   let existingHashes = {};
   try{
@@ -1483,13 +1495,16 @@ async function handleAdminFiles(files){
 
   const newHashes = {};
 
+  // Phase 1: sequential — hashing/dedup must see every prior result in order,
+  // so this stays one-at-a-time. It's CPU-only (no network), so it's fast.
+  const toUpload = [];
   for(let i=0;i<arr.length;i++){
     const file = arr[i];
+    document.getElementById('progress-text').textContent=`Analyzing ${i+1} of ${arr.length}…`;
     try{
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_').replace(/\.[^.]+$/,'');
       const displayBlob = await makeResized(file, 3200, 0.9);
       const thumbBlob = await makeResized(file, 480, 0.72);
-      document.getElementById('progress-text').textContent=`Analyzing ${i+1} of ${arr.length}…`;
       const imgEl = await blobToImage(thumbBlob);
 
       const hash = await computeDHash(imgEl);
@@ -1497,28 +1512,38 @@ async function handleAdminFiles(files){
       if(dupeOf){
         URL.revokeObjectURL(imgEl.src);
         duplicates++;
-        done++;
-        const pct = Math.round(done/arr.length*100);
-        document.getElementById('progress-fill').style.width=pct+'%';
-        document.getElementById('progress-text').textContent=`Skipped duplicate ${done} of ${arr.length}…`;
         continue;
       }
 
       const category = await classifyByContent(imgEl);
       URL.revokeObjectURL(imgEl.src);
       const baseName = `${category}__${Date.now()}_${i}_${safeName}.jpg`;
-      await uploadBlob(token, baseName, 'photo', displayBlob);
-      await uploadBlob(token, baseName, 'thumb', thumbBlob);
-
       existingHashes[baseName] = hash;
       newHashes[baseName] = hash;
+      toUpload.push({ baseName, displayBlob, thumbBlob });
     } catch(e){ failed++; }
-
-    done++;
-    const pct = Math.round(done/arr.length*100);
+    const pct = Math.round(((i+1)/arr.length)*50);
     document.getElementById('progress-fill').style.width=pct+'%';
-    document.getElementById('progress-text').textContent=`Uploaded ${done} of ${arr.length}…`;
   }
+
+  // Phase 2: concurrent — the actual network uploads, up to 5 at a time.
+  let uploaded = 0;
+  await runPool(toUpload, 5, async (item)=>{
+    try{
+      await Promise.all([
+        uploadBlob(token, item.baseName, 'photo', item.displayBlob),
+        uploadBlob(token, item.baseName, 'thumb', item.thumbBlob),
+      ]);
+    } catch(e){
+      failed++;
+      delete newHashes[item.baseName];
+      delete existingHashes[item.baseName];
+    }
+    uploaded++;
+    const pct = 50 + Math.round((uploaded/Math.max(toUpload.length,1))*50);
+    document.getElementById('progress-fill').style.width=pct+'%';
+    document.getElementById('progress-text').textContent=`Uploaded ${uploaded} of ${toUpload.length}…`;
+  });
 
   if(Object.keys(newHashes).length){
     try{
@@ -1531,7 +1556,7 @@ async function handleAdminFiles(files){
   }
 
   setTimeout(()=>{prog.style.display='none';},1000);
-  showToast(`${done-failed-duplicates} uploaded${duplicates?`, ${duplicates} duplicate skipped`:''}${failed?`, ${failed} failed`:''}`);
+  showToast(`${toUpload.length-failed} uploaded${duplicates?`, ${duplicates} duplicate skipped`:''}${failed?`, ${failed} failed`:''}`);
   loadAdminGrid();
 }
 

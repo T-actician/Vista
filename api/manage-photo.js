@@ -1,5 +1,9 @@
-const { S3Client, CopyObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, DeleteObjectCommand, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { createClient } = require('@supabase/supabase-js');
+
+const META_KEY = 'meta/photo-meta.json';
+const HASH_KEY = 'meta/photo-hashes.json';
+const CAT_LIST = ['Mountains', 'Oceans', 'Forests', 'Wildlife', 'Sunsets', 'Waterfalls', 'Flowers', 'Rivers', 'Landscapes'];
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -21,7 +25,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { action, filenames, category, location } = req.body || {};
+  const { action, filenames, category } = req.body || {};
   if (!action || !Array.isArray(filenames) || !filenames.length) {
     res.status(400).json({ error: 'action and filenames[] required' });
     return;
@@ -30,7 +34,6 @@ module.exports = async (req, res) => {
     res.status(400).json({ error: 'invalid action' });
     return;
   }
-  const CAT_LIST = ['Mountains', 'Oceans', 'Forests', 'Wildlife', 'Sunsets', 'Waterfalls', 'Flowers', 'Rivers', 'Landscapes'];
   if (action === 'recategorize' && !CAT_LIST.includes(category)) {
     res.status(400).json({ error: 'invalid category' });
     return;
@@ -47,66 +50,52 @@ module.exports = async (req, res) => {
     requestChecksumCalculation: 'WHEN_REQUIRED',
   });
 
-  async function moveOne(fromKey, toKey) {
-    await s3.send(new CopyObjectCommand({
-      Bucket: bucket,
-      CopySource: `/${bucket}/${fromKey}`,
-      Key: toKey,
-    }));
-    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: fromKey }));
-  }
-
-  const HASH_KEY = 'meta/photo-hashes.json';
-  async function updateManifest(mutate) {
-    let manifest = {};
+  async function readJson(key) {
     try {
-      const out = await s3.send(new (require('@aws-sdk/client-s3').GetObjectCommand)({ Bucket: bucket, Key: HASH_KEY }));
+      const out = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
       const chunks = [];
       for await (const c of out.Body) chunks.push(c);
-      manifest = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    } catch (e) { /* no manifest yet */ }
-    mutate(manifest);
-    await s3.send(new (require('@aws-sdk/client-s3').PutObjectCommand)({
-      Bucket: bucket, Key: HASH_KEY, Body: JSON.stringify(manifest), ContentType: 'application/json',
-    }));
+      return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    } catch (e) { return {}; }
+  }
+  async function writeJson(key, obj) {
+    await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: JSON.stringify(obj), ContentType: 'application/json' }));
   }
 
-  const results = await Promise.all(filenames.map(async rawName => {
-    const safe = String(rawName).replace(/[^a-zA-Z0-9._-]/g, '_');
-    try {
-      if (action === 'trash') {
-        await Promise.all([
-          moveOne(`photos/${safe}`, `trash/photos/${safe}`),
-          moveOne(`thumbs/${safe}`, `trash/thumbs/${safe}`).catch(()=>{}),
-        ]);
-      } else if (action === 'restore') {
-        await Promise.all([
-          moveOne(`trash/photos/${safe}`, `photos/${safe}`),
-          moveOne(`trash/thumbs/${safe}`, `thumbs/${safe}`).catch(()=>{}),
-        ]);
-      } else if (action === 'delete-permanent') {
-        await Promise.all([
-          s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `trash/photos/${safe}` })),
-          s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `trash/thumbs/${safe}` })).catch(()=>{}),
-        ]);
-        await updateManifest(m => { delete m[safe]; });
-      } else if (action === 'recategorize') {
-        const base = location === 'trash' ? 'trash/' : '';
-        const stripped = safe.replace(/^[A-Za-z]+__/, '');
-        const newSafe = `${category}__${stripped}`;
-        if (newSafe !== safe) {
-          await Promise.all([
-            moveOne(`${base}photos/${safe}`, `${base}photos/${newSafe}`),
-            moveOne(`${base}thumbs/${safe}`, `${base}thumbs/${newSafe}`).catch(()=>{}),
-          ]);
-          await updateManifest(m => { if (m[safe] !== undefined) { m[newSafe] = m[safe]; delete m[safe]; } });
-        }
-      }
-      return { name: rawName, ok: true };
-    } catch (e) {
-      return { name: rawName, ok: false, error: String(e) };
-    }
-  }));
+  const safeNames = filenames.map(rawName => String(rawName).replace(/[^a-zA-Z0-9._-]/g, '_'));
 
-  res.status(200).json({ results });
+  try {
+    if (action === 'delete-permanent') {
+      // Only real S3 op here is Delete, which B2 does not bill/count as a download.
+      const results = await Promise.all(safeNames.map(async safe => {
+        try {
+          await Promise.all([
+            s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `photos/${safe}` })),
+            s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: `thumbs/${safe}` })).catch(() => {}),
+          ]);
+          return { name: safe, ok: true };
+        } catch (e) {
+          return { name: safe, ok: false, error: String(e) };
+        }
+      }));
+      const [meta, hashes] = await Promise.all([readJson(META_KEY), readJson(HASH_KEY)]);
+      safeNames.forEach(safe => { delete meta[safe]; delete hashes[safe]; });
+      await Promise.all([writeJson(META_KEY, meta), writeJson(HASH_KEY, hashes)]);
+      res.status(200).json({ results });
+      return;
+    }
+
+    // trash / restore / recategorize: metadata flag only, zero file moves, zero B2 downloads
+    const meta = await readJson(META_KEY);
+    safeNames.forEach(safe => {
+      meta[safe] = meta[safe] || {};
+      if (action === 'trash') meta[safe].trashed = true;
+      if (action === 'restore') meta[safe].trashed = false;
+      if (action === 'recategorize') meta[safe].category = category;
+    });
+    await writeJson(META_KEY, meta);
+    res.status(200).json({ results: safeNames.map(name => ({ name, ok: true })) });
+  } catch (e) {
+    res.status(500).json({ error: 'Action failed', detail: String(e) });
+  }
 };

@@ -3,6 +3,7 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { createClient } = require('@supabase/supabase-js');
 
 const CAT_LIST = ['Mountains','Oceans','Forests','Wildlife','Sunsets','Waterfalls','Flowers','Rivers','Landscapes'];
+const META_KEY = 'meta/photo-meta.json';
 
 module.exports = async (req, res) => {
   const wantsTrash = req.query && req.query.trash === '1';
@@ -18,8 +19,8 @@ module.exports = async (req, res) => {
     }
   }
 
-  const photoPrefix = wantsTrash ? 'trash/photos/' : 'photos/';
-  const thumbPrefix = wantsTrash ? 'trash/thumbs/' : 'thumbs/';
+  const photoPrefix = 'photos/';
+  const thumbPrefix = 'thumbs/';
 
   const s3 = new S3Client({
     region: 'auto',
@@ -46,6 +47,15 @@ module.exports = async (req, res) => {
     return items;
   }
 
+  async function readMeta() {
+    try {
+      const out = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: META_KEY }));
+      const chunks = [];
+      for await (const c of out.Body) chunks.push(c);
+      return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    } catch (e) { return {}; }
+  }
+
   // Fix the signing time to the current 6-hour window (matching the cache
   // lifetime below) so a reload within that window produces the exact same
   // signed URL and the browser serves images from its own cache instead of
@@ -63,15 +73,19 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const [photoObjs, thumbObjs] = await Promise.all([
+    const [photoObjs, thumbObjs, meta] = await Promise.all([
       listAll(photoPrefix),
       listAll(thumbPrefix),
+      readMeta(),
     ]);
 
     const thumbKeys = new Set(thumbObjs.map(o => o.Key.replace(thumbPrefix, '')));
 
-    const photos = await Promise.all(photoObjs.map(async o => {
+    const photos = (await Promise.all(photoObjs.map(async o => {
       const filename = o.Key.replace(photoPrefix, '');
+      const trashed = !!(meta[filename] && meta[filename].trashed);
+      if (trashed !== wantsTrash) return null;
+
       const hasThumb = thumbKeys.has(filename);
       const catMatch = filename.match(/^([A-Za-z]+)__(.+)$/);
       let category = 'Landscapes';
@@ -80,6 +94,8 @@ module.exports = async (req, res) => {
         category = catMatch[1];
         rest = catMatch[2];
       }
+      if (meta[filename] && meta[filename].category) category = meta[filename].category;
+
       const name = rest.replace(/^\d+_/, '').replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
       const ext = (filename.match(/\.[^.]+$/) || ['.jpg'])[0];
       const downloadName = `${name.replace(/[^a-z0-9 ]/gi, '').trim() || 'vista-photo'}${ext}`;
@@ -99,7 +115,7 @@ module.exports = async (req, res) => {
         size: o.Size,
         lastModified: o.LastModified,
       };
-    }));
+    }))).filter(Boolean);
 
     photos.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
 
